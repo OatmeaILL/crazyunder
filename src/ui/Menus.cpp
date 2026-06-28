@@ -477,6 +477,43 @@ void DeathScreen::Render(sf::RenderTarget& target) const {
             340.f);
         target.draw(stats);
 
+        // 第三十轮新增：死亡回顾信息
+        if (!killerName_.empty() || comboAtDeath_ > 0 || dps_ > 0.f) {
+            float reviewY = 430.f;
+            if (!killerName_.empty()) {
+                sf::Text killerText;
+                killerText.setFont(*font_);
+                killerText.setString(U8("击杀者: ") + utf8ToSfString(killerName_));
+                killerText.setCharacterSize(20);
+                killerText.setFillColor(sf::Color(255, 150, 150));
+                bounds = killerText.getLocalBounds();
+                killerText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
+                target.draw(killerText);
+                reviewY += 28.f;
+            }
+            if (comboAtDeath_ > 0) {
+                sf::Text comboText;
+                comboText.setFont(*font_);
+                comboText.setString(U8("连击中断: ") + std::to_string(comboAtDeath_));
+                comboText.setCharacterSize(20);
+                comboText.setFillColor(sf::Color(255, 220, 100));
+                bounds = comboText.getLocalBounds();
+                comboText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
+                target.draw(comboText);
+                reviewY += 28.f;
+            }
+            if (dps_ > 0.f) {
+                sf::Text dpsText;
+                dpsText.setFont(*font_);
+                dpsText.setString(U8("每秒伤害: ") + std::to_string(static_cast<int>(dps_)));
+                dpsText.setCharacterSize(20);
+                dpsText.setFillColor(sf::Color(200, 200, 255));
+                bounds = dpsText.getLocalBounds();
+                dpsText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
+                target.draw(dpsText);
+            }
+        }
+
         // 第二十四轮新增：灵魂碎片获得提示（Meta Progression 反馈）
         // 设计意图：让玩家在死亡时看到"获得了什么"，将挫败感转化为"下一局更强"的期待
         if (shardsGained_ > 0) {

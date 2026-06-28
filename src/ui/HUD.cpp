@@ -405,7 +405,11 @@ void HUD::drawMinimap(sf::RenderTarget& target, sf::Vector2f pos) const {
         sf::Color labelColor = sf::Color::White;
         switch (room.type) {
             case RoomType::Boss:     label = "B"; labelColor = sf::Color(255, 80, 80); break;
-            case RoomType::Treasure: label = "T"; labelColor = sf::Color(255, 220, 80); break;
+            case RoomType::Treasure:
+                // 未清理的宝箱房显示 "?"，已清理显示 "T"
+                label = room.cleared ? "T" : "?";
+                labelColor = room.cleared ? sf::Color(255, 220, 80) : sf::Color(200, 200, 100);
+                break;
             case RoomType::Elite:    label = "E"; labelColor = sf::Color(220, 120, 220); break;
             case RoomType::Stairs:   label = "S"; labelColor = sf::Color(80, 220, 220); break;
             case RoomType::Hidden:   label = "?"; labelColor = sf::Color(150, 150, 150); break;
@@ -414,6 +418,12 @@ void HUD::drawMinimap(sf::RenderTarget& target, sf::Vector2f pos) const {
         if (label) {
             drawText(target, label, center, 11, labelColor, sf::Text::Bold);
         }
+    }
+
+    // ---- 4.5 第三十轮新增：绘制商人位置（$ 标记）----
+    if (merchantActive_ && merchantPos_.x > 0.f && merchantPos_.y > 0.f) {
+        sf::Vector2f mp = worldToMap(merchantPos_);
+        drawText(target, "$", mp, 11, sf::Color(255, 215, 0), sf::Text::Bold);
     }
 
     // ---- 5. 绘制玩家位置（绿色三角形 + 朝向）----
@@ -445,6 +455,9 @@ void HUD::drawMinimap(sf::RenderTarget& target, sf::Vector2f pos) const {
     drawLegend("B-BOSS", sf::Color(255, 80, 80));
     drawLegend("T-宝箱", sf::Color(255, 220, 80));
     drawLegend("S-楼梯", sf::Color(80, 220, 220));
+    if (merchantActive_) {
+        drawLegend("$-商人", sf::Color(255, 215, 0));
+    }
 }
 
 void HUD::drawText(sf::RenderTarget& target, const std::string& str,

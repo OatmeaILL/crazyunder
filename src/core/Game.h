@@ -288,6 +288,11 @@ private:
     int lastShardsGained_ = 0;           // 上次死亡获得的灵魂碎片数（用于死亡结算显示）
     int bossKillCountThisRun_ = 0;       // 本局 Boss 击杀数（用于死亡碎片计算）
 
+    // ---- 死亡回顾系统 ----
+    std::string lastKillerName_ = "";     // 最后击杀玩家的敌人名称
+    float totalDamageDealt_ = 0.f;       // 本局总伤害输出（用于 DPS 计算）
+    int comboAtDeath_ = 0;               // 死亡时的连击数
+
     // ---- 下一层与 BOSS 系统 ----
     int currentLevel_ = 1;               // 当前层数
     EntityId bossEntityId_ = kInvalidEntity; // BOSS 实体 ID

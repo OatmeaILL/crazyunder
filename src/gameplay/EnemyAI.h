@@ -238,4 +238,22 @@ inline constexpr float kSeparationWeight = 80.f;     // 分离力权重（与 mo
     return "?";
 }
 
+// ---- 敌人类型中文名（死亡回顾/UI 用）----
+[[nodiscard]] inline const char* EnemyTypeChineseName(EnemyType t) noexcept {
+    switch (t) {
+        case EnemyType::Melee:            return "近战兵";
+        case EnemyType::Ranged:           return "远程兵";
+        case EnemyType::Suicide:          return "自爆兵";
+        case EnemyType::Elite:            return "精英怪";
+        case EnemyType::Boss:             return "BOSS";
+        case EnemyType::StealthMelee:     return "隐身刺客";
+        case EnemyType::CountdownSuicide: return "倒计时炸弹";
+        case EnemyType::Splitter:         return "分裂怪";
+        case EnemyType::Shielded:         return "盾卫";
+        case EnemyType::SniperRanged:     return "狙击手";
+        case EnemyType::Caster:           return "施法者";
+    }
+    return "未知";
+}
+
 } // namespace cu

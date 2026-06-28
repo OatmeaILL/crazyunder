@@ -77,6 +77,11 @@ public:
     // 设置玩家世界位置（用于小地图玩家标记）
     void SetPlayerPosition(sf::Vector2f pos) { playerPos_ = pos; }
 
+    // 第三十轮新增：设置商人世界位置（用于小地图 $ 标记）
+    void SetMerchantPosition(sf::Vector2f pos, bool active) {
+        merchantPos_ = pos; merchantActive_ = active;
+    }
+
     // ---- 成就 Toast 通知接口 ----
     // 推入一条成就解锁通知（最多保留 4 条，超出则丢弃最旧）
     void AddAchievementToast(const std::string& name, const std::string& description);
@@ -141,6 +146,8 @@ private:
     const Dungeon* dungeon_ = nullptr;
     int currentRoomIndex_ = -1;
     sf::Vector2f playerPos_{0.f, 0.f};  // 玩家世界坐标（用于小地图）
+    sf::Vector2f merchantPos_{0.f, 0.f}; // 商人世界坐标（用于小地图 $ 标记）
+    bool merchantActive_ = false;         // 商人是否活跃
 
     // ---- 技能冷却（0=可用，1=完全冷却）----
     // 0=普攻(LMB), 1=闪避(RMB), 2=AOE(SPC), 3-6=占位技能槽(1/2/3/4)

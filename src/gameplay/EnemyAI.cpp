@@ -155,6 +155,21 @@ float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
                 // Splitter：与普通近战相同，死亡时分裂（在 UpdateEnemyCombat 中处理）
                 // Shielded：与普通近战相同，但正面减伤（在 UpdateEnemyCombat 中处理）
                 desiredVelocity = flowDir * enemy->moveSpeed;
+
+                // ---- 第三十一轮新增：近战敌人"挤开"行为 ----
+                // 当多个近战敌人在流场同一格时，给予随机横向偏移力，避免排队送死
+                // 分离力邻居中已有 otherId，此处仅对近战类型追加横向抖动
+                if (separationCount > 1) {
+                    // 分离力方向的垂直向量（顺时针 90°）
+                    sf::Vector2f perp(-separation.y, separation.x);
+                    float perpLen = std::sqrt(perp.x * perp.x + perp.y * perp.y);
+                    if (perpLen > 0.001f) {
+                        perp /= perpLen;
+                    }
+                    // 用实体 ID 作为伪随机种子，确保每个敌人行为一致但不同
+                    float offset = (static_cast<float>(id % 100) / 100.f - 0.5f) * 2.f;
+                    desiredVelocity += perp * enemy->moveSpeed * 0.4f * offset;
+                }
                 break;
             }
             case EnemyType::Boss: {
@@ -173,7 +188,32 @@ float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
                 // 自爆：高速冲撞玩家
                 // 进入冲锋范围（250px）后速度提升 2.2 倍，体现"冲刺"行为
                 float speedMul = (distToPlayer <= 250.f) ? 2.2f : 1.0f;
-                desiredVelocity = flowDir * enemy->moveSpeed * speedMul;
+
+                // ---- 第三十一轮新增：自爆怪预判 ----
+                // 冲锋时预测玩家移动方向，略微偏移瞄准点，不再直线冲向当前位置
+                // 预测量 = 玩家速度 × 预测时间（距离越近预测越准）
+                if (distToPlayer <= 250.f && distToPlayer > 0.001f) {
+                    // 获取玩家速度用于预判
+                    Velocity* playerVel = registry.GetComponent<Velocity>(playerEntity);
+                    sf::Vector2f predictOffset(0.f, 0.f);
+                    if (playerVel) {
+                        // 预测时间 = 距离 / 自爆怪速度，但限制在 0.1-0.4s 避免过度预判
+                        float chargeSpeed = enemy->moveSpeed * speedMul;
+                        float predictTime = std::min(0.4f, std::max(0.1f, distToPlayer / chargeSpeed));
+                        predictOffset = playerVel->linear * predictTime * 0.6f; // 60% 预判权重，避免过准
+                    }
+                    sf::Vector2f targetPos = playerPos + predictOffset;
+                    sf::Vector2f toTarget = targetPos - myPos;
+                    float targetDist = std::sqrt(toTarget.x * toTarget.x + toTarget.y * toTarget.y);
+                    if (targetDist > 0.001f) {
+                        desiredVelocity = (toTarget / targetDist) * enemy->moveSpeed * speedMul;
+                    } else {
+                        desiredVelocity = flowDir * enemy->moveSpeed * speedMul;
+                    }
+                } else {
+                    desiredVelocity = flowDir * enemy->moveSpeed * speedMul;
+                }
+
                 // 脚步声
                 enemy->walkSoundTimer -= dt;
                 if (enemy->walkSoundTimer <= 0.f) {
@@ -193,8 +233,15 @@ float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
                     // 太远，靠近（沿流场）
                     desiredVelocity = flowDir * enemy->moveSpeed;
                 } else {
-                    // 合适距离，缓慢移动
-                    desiredVelocity = flowDir * enemy->moveSpeed * 0.3f;
+                    // ---- 第三十一轮新增：远程敌人侧移 ----
+                    // 合适距离时做垂直于玩家方向的横向移动，不再原地站桩
+                    if (distToPlayer > 0.001f) {
+                        sf::Vector2f toPlayerDir = toPlayer / distToPlayer;
+                        // 垂直方向（顺时针 90°），用 ID 决定左/右
+                        sf::Vector2f perp(-toPlayerDir.y, toPlayerDir.x);
+                        float side = (id % 2 == 0) ? 1.f : -1.f;
+                        desiredVelocity = perp * enemy->moveSpeed * 0.5f * side;
+                    }
                 }
                 break;
             }
@@ -209,8 +256,14 @@ float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
                     // 太远，缓慢靠近
                     desiredVelocity = flowDir * enemy->moveSpeed * 0.5f;
                 } else {
-                    // 合适距离，几乎静止（便于瞄准射击）
-                    desiredVelocity = sf::Vector2f(0.f, 0.f);
+                    // ---- 第三十一轮新增：狙击手侧移 ----
+                    // 合适距离时做横向移动，增加被瞄准难度
+                    if (distToPlayer > 0.001f) {
+                        sf::Vector2f toPlayerDir = toPlayer / distToPlayer;
+                        sf::Vector2f perp(-toPlayerDir.y, toPlayerDir.x);
+                        float side = (id % 2 == 0) ? 1.f : -1.f;
+                        desiredVelocity = perp * enemy->moveSpeed * 0.6f * side;
+                    }
                 }
                 break;
             }
@@ -232,8 +285,29 @@ float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
                     }
                 }
 
-                // 隐身时以 3 倍速（即满速）接近，显形后保持高速追击
-                desiredVelocity = flowDir * enemy->moveSpeed;
+                // ---- 第三十一轮新增：隐身伏击行为 ----
+                // 隐身时：不走流场，直接朝玩家直线移动（无视地形绕路，更智能的追踪）
+                // 显形瞬间：短暂加速冲刺（1.3x 持续 0.5s），给玩家突然遭遇的紧张感
+                if (enemy->isStealth) {
+                    // 隐身时直接朝玩家直线移动
+                    if (distToPlayer > 0.001f) {
+                        desiredVelocity = (playerPos - myPos) / distToPlayer * enemy->moveSpeed;
+                    }
+                } else {
+                    // 显形后：检查是否刚显形（冲刺窗口）
+                    if (wasStealth && !enemy->isStealth) {
+                        // 刚显形，启动 0.5s 冲刺
+                        enemy->specialTimer = 0.5f; // 复用 specialTimer 作为冲刺计时
+                    }
+                    if (enemy->specialTimer > 0.f) {
+                        // 冲刺中：1.3x 加速追击
+                        enemy->specialTimer -= dt;
+                        desiredVelocity = flowDir * enemy->moveSpeed * 1.3f;
+                    } else {
+                        // 冲刺结束：正常追击
+                        desiredVelocity = flowDir * enemy->moveSpeed;
+                    }
+                }
                 break;
             }
             case EnemyType::CountdownSuicide: {
@@ -560,14 +634,18 @@ float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
                     // 播放玩家受伤音效
                     AudioManager::Instance().PlaySFX(AudioManager::kSFXPlayerHurt);
 
+                    // ---- 第三十轮新增：死亡回顾 - 记录最后攻击者 ----
                     // ---- 第十八轮新增：玩家受伤重置连击 ----
                     // 近战接触伤害直接修改 HP 不经过 CombatSystem::ApplyDamage，
                     // 因此 OnHit 回调不会触发，需在此处手动重置 combo。
                     // 设计意图：避免玩家无脑肉搏堆 combo，受伤意味着走位失败。
                     PlayerComponent* playerPc = registry.GetComponent<PlayerComponent>(playerEntity);
-                    if (playerPc && playerPc->comboCount > 0) {
-                        playerPc->comboCount = 0;
-                        playerPc->comboTimer = 0.f;
+                    if (playerPc) {
+                        playerPc->lastAttackerEntity = id;
+                        if (playerPc->comboCount > 0) {
+                            playerPc->comboCount = 0;
+                            playerPc->comboTimer = 0.f;
+                        }
                     }
                 }
                 // 重置攻击冷却（远程 2s，狙击 2.5s，其他 1s）

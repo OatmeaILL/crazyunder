@@ -118,6 +118,10 @@ public:
     void SetStats(int kills, int level, float survivalTime);
     // 第二十四轮新增：设置本次死亡获得的灵魂碎片数（用于显示 meta progression 反馈）
     void SetShardsGained(int shards) { shardsGained_ = shards; }
+    // 第三十轮新增：死亡回顾信息
+    void SetDeathReview(const std::string& killerName, int combo, float dps) {
+        killerName_ = killerName; comboAtDeath_ = combo; dps_ = dps;
+    }
 
     void Render(sf::RenderTarget& target) const override;
 
@@ -129,6 +133,10 @@ private:
     int level_ = 1;
     float survivalTime_ = 0.f;
     int shardsGained_ = 0; // 第二十四轮新增：本次死亡获得的灵魂碎片
+    // 第三十轮新增：死亡回顾
+    std::string killerName_ = "";
+    int comboAtDeath_ = 0;
+    float dps_ = 0.f;
 };
 
 // ============================================================================

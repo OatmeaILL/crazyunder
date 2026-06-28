@@ -235,6 +235,29 @@ void Game::registerStates() {
                 LOG_WARN("灵魂碎片持久化失败（本次获得 %d 碎片）", shards);
             }
             deathScreen_.SetShardsGained(shards);
+            // 第三十轮新增：死亡回顾信息
+            std::string killerName = "";
+            int comboAtDeath = 0;
+            float dps = 0.f;
+            PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
+            if (pc) {
+                comboAtDeath = pc->comboCount;
+                if (survivalTime_ > 0.f) {
+                    dps = pc->totalDamageDealt / survivalTime_;
+                }
+                // 查找最后攻击者的敌人名称
+                if (pc->lastAttackerEntity != kInvalidEntity) {
+                    EnemyComponent* ec = registry_.GetComponent<EnemyComponent>(pc->lastAttackerEntity);
+                    if (ec) {
+                        killerName = EnemyTypeChineseName(ec->type);
+                        // Champion 敌人加上前缀
+                        if (ec->isChampion) {
+                            killerName = "Champion " + killerName;
+                        }
+                    }
+                }
+            }
+            deathScreen_.SetDeathReview(killerName, comboAtDeath, dps);
             LOG_INFO("本局死亡结算: 层数=%d 击杀=%d Boss=%d → 获得 %d 灵魂碎片",
                      currentLevel_, totalKillCount_, bossKillCountThisRun_, shards);
             deathScreen_.SetVisible(true);
@@ -1319,6 +1342,9 @@ void Game::updateHUDData() {
         // ---- 第二十轮新增：推送极限闪避系统数据到 HUD ----
         // HUD 根据 perfectDodgeBuffTimer > 0 显示金色光环边框
         hud_.SetPerfectDodgeData(pc->perfectDodgeBuffTimer, pc->perfectDodgeCooldown);
+
+        // ---- 第三十轮新增：推送商人位置到 HUD（用于小地图 $ 标记）----
+        hud_.SetMerchantPosition(merchantSystem_.GetPosition(), merchantSystem_.IsActive());
     }
 }
 
@@ -2310,7 +2336,7 @@ void Game::renderPlaying(float /*alpha*/) {
     // 7. 操作提示（底部小字）
     hintText_.setCharacterSize(14);
     hintText_.setPosition(10.f, 695.f);
-    hintText_.setString(U8("WASD:移动 | 左键:射击 | 右键:闪避 | 空格:AOE | E:交互/商人 | G:背包 | J:技能升级 | F1:调试 | P/ESC:暂停"));
+    hintText_.setString(U8("WASD:移动 | 左键:射击 | 右键:闪避 | 空格:AOE | E:交互/商人 | G:背包 | J:技能升级 | H:帮助 | F1:调试 | P/ESC:暂停"));
     window_.draw(hintText_);
 
     // 8. 调试信息（F1 切换）
@@ -2877,10 +2903,10 @@ void Game::renderTutorial() {
     card.setOutlineThickness(3.f);
     window_.draw(card);
 
-    // 标题
+    // 标题：首次显示"操作指南"，H 键重新打开时显示"帮助手册"
     sf::Text title;
     title.setFont(font);
-    title.setString(U8("操作指南"));
+    title.setString(tutorialShown_ ? U8("帮助手册") : U8("操作指南"));
     title.setCharacterSize(40);
     title.setFillColor(sf::Color(255, 220, 100));
     title.setStyle(sf::Text::Bold);
@@ -2908,6 +2934,7 @@ void Game::renderTutorial() {
         { "Q 键",           "切换任务面板" },
         { "Tab 键",         "切换成就面板" },
         { "R 键",           "切换圣物面板" },
+        { "H 键",           "打开帮助手册" },
         { "Enter 键",       "开始下一波" },
     };
     constexpr int kItemCount = sizeof(items) / sizeof(items[0]);
@@ -2986,8 +3013,8 @@ void Game::renderTutorial() {
     // 底部提示
     sf::Text closeHint;
     closeHint.setFont(font);
-    closeHint.setString(U8("按任意键或点击鼠标开始游戏"));
-    closeHint.setCharacterSize(18);
+    closeHint.setString(U8("按任意键或点击鼠标关闭  |  游戏中按 H 重新打开"));
+    closeHint.setCharacterSize(16);
     closeHint.setFillColor(sf::Color(180, 255, 180));
     closeHint.setStyle(sf::Text::Italic);
     sf::FloatRect cb = closeHint.getLocalBounds();
@@ -3134,6 +3161,11 @@ void Game::restartGame() {
     survivalTime_ = 0.f;
     currentWaveNumber_ = 0;
     bossKillCountThisRun_ = 0; // 第二十四轮新增：重置本局 Boss 击杀计数
+
+    // 第三十轮新增：重置死亡回顾字段
+    lastKillerName_ = "";
+    totalDamageDealt_ = 0.f;
+    comboAtDeath_ = 0;
 
     // 重置 BOSS 状态
     bossActive_ = false;
@@ -3515,6 +3547,10 @@ void Game::handleSaveLoadMenuClick(int action) {
             currentLevel_ = 1;
             totalKillCount_ = 0;
             survivalTime_ = 0.f;
+            bossKillCountThisRun_ = 0;
+            lastKillerName_ = "";
+            totalDamageDealt_ = 0.f;
+            comboAtDeath_ = 0;
             // 重置所有 UI 标志
             resetAllUIFlags();
             mainMenu_.SetVisible(false);
@@ -3613,12 +3649,14 @@ void Game::handleEvents() {
         input_.HandleEvent(event);
 
         // 按键教程显示期间，任意按键/鼠标点击关闭教程（但不处理其他游戏输入）
+        // H 键除外：H 键专门用于切换帮助手册
         if (tutorialVisible_) {
-            if (event.type == sf::Event::KeyPressed ||
-                event.type == sf::Event::MouseButtonPressed) {
+            if (event.type == sf::Event::KeyPressed && event.key.code != sf::Keyboard::H) {
                 tutorialVisible_ = false;
                 LOG_INFO("按键教程已关闭");
-                // 不 continue，让后续逻辑正常处理本次输入（如 ESC 不会立即触发暂停）
+            } else if (event.type == sf::Event::MouseButtonPressed) {
+                tutorialVisible_ = false;
+                LOG_INFO("按键教程已关闭");
             }
         }
 
@@ -3707,6 +3745,15 @@ void Game::handleEvents() {
             } else if (key == sf::Keyboard::F1) {
                 debugMode_ = !debugMode_;
                 LOG_INFO("调试模式: %s", debugMode_ ? "开启" : "关闭");
+            } else if (key == sf::Keyboard::H) {
+                // H 键切换帮助手册（可重复查看按键教程）
+                if (state_ == GameState::Playing && !upgradeChoiceActive_ &&
+                    !inventoryMenuVisible_ && !merchantMenuVisible_ &&
+                    !questMenuVisible_ && !achievementMenuVisible_ &&
+                    !relicPanelVisible_) {
+                    tutorialVisible_ = !tutorialVisible_;
+                    LOG_INFO("帮助手册: %s", tutorialVisible_ ? "打开" : "关闭");
+                }
             } else if (key == sf::Keyboard::F5) {
                 // F5 键切换调试面板
                 if (state_ == GameState::Playing) {

@@ -85,6 +85,22 @@ void CombatSystem::ApplyDamage(Registry& registry, const DamageInfo& info) {
         health->current = 0.f;
     }
 
+    // ---- 第三十轮新增：死亡回顾 - 伤害统计 ----
+    // 当攻击者是玩家时，累计总伤害（用于 DPS 计算）
+    if (info.attacker != kInvalidEntity) {
+        PlayerComponent* attackerPc = registry.GetComponent<PlayerComponent>(info.attacker);
+        if (attackerPc) {
+            attackerPc->totalDamageDealt += finalDamage;
+        }
+    }
+    // 当目标是玩家时，记录最后攻击者（用于死亡回顾击杀者显示）
+    if (info.target != kInvalidEntity) {
+        PlayerComponent* targetPc = registry.GetComponent<PlayerComponent>(info.target);
+        if (targetPc && info.attacker != kInvalidEntity) {
+            targetPc->lastAttackerEntity = info.attacker;
+        }
+    }
+
     // ---- 应用击退 ----
     // 将击退向量叠加到目标速度，使目标被推开
     // 击退力度由 DamageInfo.knockback 的模决定

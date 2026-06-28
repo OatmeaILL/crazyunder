@@ -179,6 +179,10 @@ struct PlayerComponent {
     // ---- 事件房交互字段 ----
     bool eventPromptActive = false;     // 是否显示事件交互提示
     int  eventRoomIndex = -1;           // 当前可交互的事件房索引
+
+    // ---- 死亡回顾系统 ----
+    EntityId lastAttackerEntity = kInvalidEntity; // 最后攻击玩家的敌人实体 ID
+    float totalDamageDealt = 0.f;       // 本局总伤害输出（用于 DPS 计算）
 };
 
 // ---- 玩家 Sprite Sheet 信息 ----
