@@ -85,14 +85,13 @@ float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
     neighbors.reserve(64);
 
     // 遍历所有拥有 EnemyComponent + Transform 的实体
-    // 使用 View 获取同时拥有这两个组件的实体
-    auto enemies = registry.View<EnemyComponent, Transform>();
-    for (EntityId id : enemies) {
+    // 使用 ForEach 遍历，避免每帧分配临时 vector
+    registry.ForEach<EnemyComponent, Transform>([&](EntityId id) {
         EnemyComponent* enemy = registry.GetComponent<EnemyComponent>(id);
         Transform* transform = registry.GetComponent<Transform>(id);
         Velocity* velocity = registry.GetComponent<Velocity>(id);
-        if (!enemy || !transform) continue;
-        if (!enemy->active) continue; // 跳过池中待命的非活跃敌人
+        if (!enemy || !transform) return;
+        if (!enemy->active) return; // 跳过池中待命的非活跃敌人
 
         sf::Vector2f myPos = transform->position;
 
@@ -583,7 +582,7 @@ float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
                 }
             }
         }
-    }
+    });
 
     auto endTime = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
@@ -623,12 +622,11 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
     neighbors.reserve(64);
 
     // 遍历所有敌人
-    auto enemies = registry.View<EnemyComponent, Transform>();
-    for (EntityId id : enemies) {
+    registry.ForEach<EnemyComponent, Transform>([&](EntityId id) {
         EnemyComponent* enemy = registry.GetComponent<EnemyComponent>(id);
         Transform* transform = registry.GetComponent<Transform>(id);
-        if (!enemy || !transform) continue;
-        if (!enemy->active) continue;
+        if (!enemy || !transform) return;
+        if (!enemy->active) return;
 
         Health* health = registry.GetComponent<Health>(id);
         sf::Vector2f myPos = transform->position;
@@ -730,7 +728,7 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
                 LOG_INFO("分裂怪死亡，生成 %d 个小怪", enemy->splitCount);
             }
 
-            continue; // 死亡敌人不再处理攻击
+            return; // 死亡敌人不再处理攻击
         }
 
         // ---- 第二十一轮新增：激活 EnemyAffix 词缀系统 ----
@@ -817,13 +815,12 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
             if (enemy->summonTimer <= 0.f && spawner) {
                 // 统计当前场上 Boss 召唤物数量
                 int activeMinions = 0;
-                auto minionView = registry.View<EnemyComponent>();
-                for (EntityId mid : minionView) {
+                registry.ForEach<EnemyComponent>([&](EntityId mid) {
                     EnemyComponent* mc = registry.GetComponent<EnemyComponent>(mid);
                     if (mc && mc->active && mc->isBossMinion) {
                         ++activeMinions;
                     }
-                }
+                });
                 if (activeMinions < kMaxBossMinions) {
                     constexpr int kSummonCount = 2;
                     constexpr float kSummonRadius = 60.f;
@@ -929,13 +926,12 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
                 if (!enemy->eliteSummoned50 && hpRatio <= 0.5f && spawner) {
                     // HP 首次跌破 50%，立即召唤 1 精英（受上限约束）
                     int activeMinions = 0;
-                    auto minionView = registry.View<EnemyComponent>();
-                    for (EntityId mid : minionView) {
+                    registry.ForEach<EnemyComponent>([&](EntityId mid) {
                         EnemyComponent* mc = registry.GetComponent<EnemyComponent>(mid);
                         if (mc && mc->active && mc->isBossMinion) {
                             ++activeMinions;
                         }
-                    }
+                    });
                     if (activeMinions < kMaxBossMinions) {
                         float angle = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX) * 6.2831853f;
                         sf::Vector2f spawnPos(
@@ -961,13 +957,12 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
                 if (enemy->eliteSummoned50 && enemy->eliteSummonTimer <= 0.f && spawner) {
                     // 持续召唤精英（受上限约束）
                     int activeMinions = 0;
-                    auto minionView = registry.View<EnemyComponent>();
-                    for (EntityId mid : minionView) {
+                    registry.ForEach<EnemyComponent>([&](EntityId mid) {
                         EnemyComponent* mc = registry.GetComponent<EnemyComponent>(mid);
                         if (mc && mc->active && mc->isBossMinion) {
                             ++activeMinions;
                         }
-                    }
+                    });
                     if (activeMinions < kMaxBossMinions) {
                         float angle = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX) * 6.2831853f;
                         sf::Vector2f spawnPos(
@@ -1068,7 +1063,7 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
                 castWarnings->end()
             );
         }
-        if (enemy->attackCooldown > 0.f) continue;
+        if (enemy->attackCooldown > 0.f) return;
 
         // ---- 远程敌人射击 ----
         if (enemy->type == EnemyType::Ranged) {
@@ -1149,7 +1144,7 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
                 enemy->attackCooldown = 3.0f;
             }
         }
-    }
+    });
 
     auto endTime = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);

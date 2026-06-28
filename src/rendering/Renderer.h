@@ -96,6 +96,10 @@ private:
     // 内部 1x1 白色纹理（用于无纹理的四边形）
     sf::Texture whiteTexture_;
 
+    // 预分配顶点缓冲（复用，避免每帧重新分配）
+    // 支持 5000 精灵 = 20000 顶点，约 320KB
+    std::vector<sf::Vertex> vertexBuffer_;
+
     // 统计
     int drawCallCount_ = 0;
     int vertexCount_ = 0;

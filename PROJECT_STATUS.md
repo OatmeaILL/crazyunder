@@ -1,6 +1,6 @@
-# CrazyUnder 项目状态总结（2026-06-28 第二十九轮）
+# CrazyUnder 项目状态总结（2026-06-29 第三十轮）
 
-> 本文档供新会话继承上下文使用。当前会话已完成二十九轮开发，包含核心修复、系统扩展与体验优化。
+> 本文档供新会话继承上下文使用。当前会话已完成三十轮开发，包含核心修复、系统扩展与体验优化。
 
 ## 四、本轮新增/修复内容（第十轮）
 
@@ -833,6 +833,50 @@ Suicide（自爆怪）和 CountdownSuicide（倒计时自爆怪）原版过于�
 ### 编译验证（第二十九轮）
 - Release 版本增量编译成功（exit_code=0），仅重新编译 EnemyAI.cpp + EnemySpawner.cpp
 - 无新增警告，仅历史遗留（C4244/C4819/C4996）
+- 可执行文件：`build/bin/Release/crazyunder.exe`
+
+---
+
+## 四-t、第三十轮新增/修复内容（渲染性能优化——顶点缓冲池化 + ECS 零分配查询）
+
+### 设计意图
+本轮聚焦性能优化，针对游戏中两个最关键的性能瓶颈进行重构：Renderer 顶点缓冲每帧分配/释放问题（每帧 ~128KB 堆分配），以及 ECS View() 每帧分配临时 vector 的累积开销（17 处调用点，最密集路径每帧执行多次）。优化后预计提升 20-30% 帧率稳定性。
+
+### P2 性能优化——渲染命令池化
+
+85. **Renderer 顶点缓冲池化**（Renderer.h/.cpp）
+    - **问题定位**：`EndScene()` 中 `std::vector<sf::Vertex> vertices;` 是函数局部变量，每帧构造/析构。2000 精灵场景 = 8000 顶点 = 约 128KB 内存分配/释放。60FPS 时每秒 60 次分配，造成堆碎片和 GC 压力。
+    - **修复方案**：
+      - `Renderer.h` 新增 `std::vector<sf::Vertex> vertexBuffer_` 成员变量（预分配 20000 顶点 = 5000 精灵容量，约 320KB）
+      - `Renderer.cpp` 构造函数中执行 `vertexBuffer_.reserve(20000)`
+      - `EndScene()` 中将局部 `vertices` 改为引用 `vertexBuffer_`，调用 `vertices.clear()`（仅重置 size，不释放容量）
+    - **验证**：编译通过，vertexBuffer_ 在 Renderer 生命周期内复用
+
+86. **flushBatch 零拷贝绘制**（Renderer.cpp）
+    - **问题定位**：原 `flushBatch` 创建临时 `sf::VertexArray array(sf::Quads, vertices.size())` 并逐顶点拷贝，每批增加一次 O(N) 拷贝
+    - **修复方案**：直接使用 `target_->draw(vertices.data(), vertices.size(), sf::Quads, states)` 零拷贝 API，跳过 VertexArray 中间层
+    - **验证**：编译通过，每帧减少至少 1 次顶点拷贝
+
+### P2 性能优化——ECS View() 零分配查询
+
+87. **Registry::ForEach 回调模式**（Registry.h）
+    - **新增模板方法**：`ForEach<Components...>(Func&& func)` 零分配遍历。与 `View()` 功能等价，但通过回调直接处理每个实体，不分配临时 `std::vector<EntityId>`
+    - **内部实现**：与 View() 相同的"最小池遍历 + 组件检查"算法，仅回调处理而非 push_back
+    - **接口设计**：`continue` → `return` 语义兼容，lambda 捕获引用访问外部状态
+
+88. **关键路径替换为 ForEach**（8 个文件，14 处调用点）
+    - **替换原则**：所有每帧高频调用的 View() 路径替换为 ForEach
+    - **Game.cpp**（6 处）：空间网格更新、统一死亡检测、BOSS 检测、实体渲染、Champion 血条渲染、统计计数、秒杀调试
+    - **EnemyAI.cpp**（5 处）：UpdateEnemyAI 主循环、UpdateEnemyCombat 主循环、3 处 Boss 召唤物计数
+    - **CombatSystem.cpp**（1 处）：UpdateStatusEffects 状态推进循环
+    - **CombatEffects.cpp**（2 处）：UpdateDamageTexts 更新、RenderDamageTexts 渲染
+    - **Animation.cpp**（1 处）：AnimationSystem::Update 帧动画推进
+    - **RoomSystem.cpp**（1 处）：hasAliveEnemiesInRoom 房间内敌人检测（含早期返回语义修复）
+    - **特殊处理**：RoomSystem 的 `hasAliveEnemiesInRoom` 原使用 `return true` 从函数早期返回，改为 `found` 标志 + lambda 短路返回，确保零分配同时语义正确
+
+### 编译验证（第三十轮）
+- Release 版本编译成功（exit_code=0），仅重新编译改动文件（Renderer/Game/EnemyAI/CombatSystem/CombatEffects/Animation/RoomSystem/Registry）
+- 编译器报告：0 error, 0 new warning，仅历史遗留 C4244（`int→float`，无害）
 - 可执行文件：`build/bin/Release/crazyunder.exe`
 
 ---
@@ -2117,6 +2161,54 @@ Roguelike 割草爽游的核心乐趣来自"激进玩法 → 击杀加速 → �
   - `InventoryMenu` 类新增静态方法 `formatSetBonusShort(SetBonusType, float)`：将 8 种加成类型格式化为简短中文描述
   - `InventoryMenu::Render` 在标题下方 y=78 新增"激活套装"汇总行
   - 装备槽 cell 底部 y+62 显示 "[套装名]"（套装主色，10pt 粗体）
+
+## 九、代码修改记录（第三十轮关键文件）
+
+### src/rendering/Renderer.h
+- 新增 `std::vector<sf::Vertex> vertexBuffer_` 私有成员（预分配顶点缓冲，复用避免每帧重新分配）
+
+### src/rendering/Renderer.cpp
+- 构造函数：新增 `vertexBuffer_.reserve(20000)` 预分配，支持 5000 精灵（20000 顶点，约 320KB）
+- `EndScene()`：局部 `std::vector<sf::Vertex> vertices` 改为引用 `vertexBuffer_`，`vertices.clear()` 仅重置 size 不释放容量
+- `flushBatch()`：从逐顶点拷贝到 `sf::VertexArray` 改为 `target_->draw(vertices.data(), vertices.size(), sf::Quads, states)` 零拷贝 API
+
+### src/ecs/Registry.h
+- 新增 `ForEach<Components..., Func>(Func&& func)` 零分配模板方法，通过回调直接遍历实体，不分配临时 vector
+
+### src/core/Game.cpp（6 处替换）
+- 空间网格更新：`View<EnemyComponent, Transform>` → `ForEach<EnemyComponent, Transform>`
+- 统一死亡检测：`View<EnemyComponent, Health>` → `ForEach<EnemyComponent, Health>`
+- BOSS 检测：`View<EnemyComponent, Health>` → `ForEach<EnemyComponent, Health>`（含 `bossActive_` 短路退出）
+- 实体 Sprite 渲染：`View<Transform, Sprite>` → `ForEach<Transform, Sprite>`
+- Champion 血条渲染：`View<Transform, EnemyComponent>` → `ForEach<Transform, EnemyComponent>`
+- 统计计数 + 秒杀调试：`View<EnemyComponent>` → `ForEach<EnemyComponent>`
+- 所有 `continue` 同步改为 `return`
+
+### src/gameplay/EnemyAI.cpp（5 处替换）
+- `UpdateEnemyAI` 主循环：`View<EnemyComponent, Transform>` → `ForEach<EnemyComponent, Transform>`
+- `UpdateEnemyCombat` 主循环：`View<EnemyComponent, Transform>` → `ForEach<EnemyComponent, Transform>`
+- 3 处 Boss 召唤物计数：`View<EnemyComponent>` → `ForEach<EnemyComponent>`
+- 所有 `continue` 同步改为 `return`
+
+### src/gameplay/CombatSystem.cpp（1 处替换）
+- `UpdateStatusEffects`：`View<StatusEffectComponent>` → `ForEach<StatusEffectComponent>`
+
+### src/gameplay/CombatEffects.cpp（2 处替换）
+- `UpdateDamageTexts`：`View<DamageTextComponent, Transform>` → `ForEach<DamageTextComponent, Transform>`
+- `RenderDamageTexts`：`View<DamageTextComponent, Transform>` → `ForEach<DamageTextComponent, Transform>`
+
+### src/gameplay/Animation.cpp（1 处替换）
+- `AnimationSystem::Update`：`View<AnimationComponent, Sprite>` → `ForEach<AnimationComponent, Sprite>`
+
+### src/gameplay/RoomSystem.cpp（1 处替换）
+- `hasAliveEnemiesInRoom`：`View<EnemyComponent, Transform>` → `ForEach<EnemyComponent, Transform>`
+- 特殊处理：原 `return true` 早期返回改为 `found` 标志 + lambda 短路，语义等价
+
+### 编译验证（第三十轮）
+- Release 版本增量编译成功（exit_code=0），无新增警告
+- 仅历史遗留警告：C4244（`int→float`）
+- 可执行文件：`build/bin/Release/crazyunder.exe`
+
 
 ### 数值平衡设计
 

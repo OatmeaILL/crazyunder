@@ -192,13 +192,12 @@ void CombatSystem::ApplyStatus(Registry& registry, EntityId target,
 // 周期伤害通过直接扣减 HP 实现（不触发 OnHit 回调，避免无限连锁）。
 // ============================================================================
 void CombatSystem::UpdateStatusEffects(Registry& registry, float dt) {
-    auto entities = registry.View<StatusEffectComponent>();
-    for (EntityId id : entities) {
+    registry.ForEach<StatusEffectComponent>([&](EntityId id) {
         StatusEffectComponent* statusComp = registry.GetComponent<StatusEffectComponent>(id);
         Health* health = registry.GetComponent<Health>(id);
-        if (!statusComp || !health) continue;
+        if (!statusComp || !health) return;
         // 仅对存活实体推进状态（已死亡的不应再受 DoT）
-        if (health->current <= 0.f) continue;
+        if (health->current <= 0.f) return;
 
         // 逆序遍历以便安全删除过期状态
         for (int i = static_cast<int>(statusComp->effects.size()) - 1; i >= 0; --i) {
@@ -243,7 +242,7 @@ void CombatSystem::UpdateStatusEffects(Registry& registry, float dt) {
                 statusComp->effects.erase(statusComp->effects.begin() + i);
             }
         }
-    }
+    });
 }
 
 // ============================================================================

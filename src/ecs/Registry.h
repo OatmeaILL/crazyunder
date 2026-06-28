@@ -243,6 +243,34 @@ public:
         return result;
     }
 
+    // ---- 零分配查询：ForEach<Components>(func) ----
+    // 与 View() 功能相同，但通过回调处理每个实体，不分配临时 vector。
+    // 适用场景：每帧高频调用的遍历（EnemyAI、CombatSystem 等）。
+    // 示例：
+    //   registry.ForEach<EnemyComponent, Transform>([&](EntityId id) {
+    //       auto* ec = registry.GetComponent<EnemyComponent>(id);
+    //       auto* tr = registry.GetComponent<Transform>(id);
+    //       // ...
+    //   });
+    template <typename... Components, typename Func>
+    void ForEach(Func&& func) {
+        IComponentPool* smallest = nullptr;
+        std::size_t minSize = SIZE_MAX;
+        IComponentPool* pools[] = { static_cast<IComponentPool*>(&getPool<Components>())... };
+        for (auto* p : pools) {
+            if (p && p->Size() < minSize) {
+                minSize = p->Size();
+                smallest = p;
+            }
+        }
+        if (!smallest) return;
+
+        for (EntityId id : smallest->GetEntities()) {
+            bool hasAll = (poolsMatch<Components>(id) && ...);
+            if (hasAll) func(id);
+        }
+    }
+
     // 销毁实体时移除其所有组件（内部调用）
     void removeAllComponents(EntityId id);
 

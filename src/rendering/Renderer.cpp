@@ -5,6 +5,10 @@
 namespace cu {
 
 Renderer::Renderer() {
+    // 预分配顶点缓冲，支持 5000 精灵（20000 顶点，约 320KB）
+    // 避免每帧在 EndScene 中重新分配内存
+    vertexBuffer_.reserve(20000);
+
     // 创建 1x1 白色纹理，用于无纹理四边形（DrawQuad）
     // 顶点颜色乘以白色纹理 = 顶点颜色本身，实现纯色绘制
     whiteTexture_.create(1, 1);
@@ -75,8 +79,8 @@ void Renderer::EndScene() {
 
     // 2. 批量绘制：同纹理的连续命令合并为一个 VertexArray
     const sf::Texture* currentTexture = nullptr;
-    std::vector<sf::Vertex> vertices;
-    vertices.reserve(commands_.size() * 4); // 预分配，避免反复扩容
+    auto& vertices = vertexBuffer_;  // 复用成员缓冲，避免每帧重新分配
+    vertices.clear();                // 仅重置 size，不释放容量
 
     for (const auto& cmd : commands_) {
         if (cmd.texture != currentTexture) {
@@ -119,16 +123,10 @@ void Renderer::flushBatch(const sf::Texture* texture,
                           std::vector<sf::Vertex>& vertices) {
     if (!target_ || vertices.empty() || !texture) return;
 
-    // 构建 VertexArray 并绘制
-    sf::VertexArray array(sf::Quads, vertices.size());
-    for (std::size_t i = 0; i < vertices.size(); ++i) {
-        array[i] = vertices[i];
-    }
-
-    // 绑定纹理并绘制（一次 Draw Call）
+    // 零拷贝绘制：直接用顶点指针，避免创建临时 sf::VertexArray
     sf::RenderStates states;
     states.texture = texture;
-    target_->draw(array, states);
+    target_->draw(vertices.data(), vertices.size(), sf::Quads, states);
 
     // 更新统计
     ++drawCallCount_;

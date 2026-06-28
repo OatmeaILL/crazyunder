@@ -157,11 +157,12 @@ int RoomSystem::findRoomContaining(const Dungeon& dungeon, sf::Vector2f playerPo
 bool RoomSystem::hasAliveEnemiesInRoom(Registry& registry, const Dungeon& dungeon,
                                         const Room& room) const {
     // 遍历所有敌人，检查是否在房间世界边界内
-    auto enemies = registry.View<EnemyComponent, Transform>();
-    for (EntityId id : enemies) {
+    bool found = false;
+    registry.ForEach<EnemyComponent, Transform>([&](EntityId id) {
+        if (found) return;
         EnemyComponent* enemy = registry.GetComponent<EnemyComponent>(id);
         Transform* t = registry.GetComponent<Transform>(id);
-        if (!enemy || !t || !enemy->active) continue;
+        if (!enemy || !t || !enemy->active) return;
 
         // 获取房间的世界边界，扩展 64px（允许敌人在门口附近）
         sf::FloatRect worldBounds = room.getWorldBounds(dungeon.worldOffset);
@@ -171,10 +172,10 @@ bool RoomSystem::hasAliveEnemiesInRoom(Registry& registry, const Dungeon& dungeo
         worldBounds.height += 128.f;
 
         if (worldBounds.contains(t->position)) {
-            return true;
+            found = true;
         }
-    }
-    return false;
+    });
+    return found;
 }
 
 // ============================================================================

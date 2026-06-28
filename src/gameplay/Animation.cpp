@@ -14,13 +14,11 @@ namespace cu {
 
 void AnimationSystem::Update(Registry& registry, float dt) {
     // 查询同时拥有 AnimationComponent 和 Sprite 的实体
-    auto entities = registry.View<AnimationComponent, Sprite>();
-
-    for (EntityId id : entities) {
+    registry.ForEach<AnimationComponent, Sprite>([&](EntityId id) {
         AnimationComponent* anim = registry.GetComponent<AnimationComponent>(id);
         Sprite* sprite = registry.GetComponent<Sprite>(id);
-        if (!anim || !sprite) continue;
-        if (!anim->playing || anim->frames.empty()) continue;
+        if (!anim || !sprite) return;
+        if (!anim->playing || anim->frames.empty()) return;
 
         // 累加时间
         anim->accumulator += dt;
@@ -43,7 +41,7 @@ void AnimationSystem::Update(Registry& registry, float dt) {
 
         // 更新 Sprite 的源矩形为当前帧
         sprite->sourceRect = anim->frames[anim->currentFrame];
-    }
+    });
 }
 
 // ============================================================================

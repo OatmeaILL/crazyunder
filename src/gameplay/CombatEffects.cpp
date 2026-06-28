@@ -181,13 +181,12 @@ void SpawnFloatText(Registry& registry,
 //   3. 到期销毁实体
 // ============================================================================
 void UpdateDamageTexts(Registry& registry, float dt) {
-    auto entities = registry.View<DamageTextComponent, Transform>();
     std::vector<EntityId> toDestroy;
 
-    for (EntityId id : entities) {
+    registry.ForEach<DamageTextComponent, Transform>([&](EntityId id) {
         DamageTextComponent* dmgText = registry.GetComponent<DamageTextComponent>(id);
         Transform* transform = registry.GetComponent<Transform>(id);
-        if (!dmgText || !transform) continue;
+        if (!dmgText || !transform) return;
 
         // 上浮
         transform->position += dmgText->velocity * dt;
@@ -197,7 +196,7 @@ void UpdateDamageTexts(Registry& registry, float dt) {
         if (dmgText->lifetime <= 0.f) {
             toDestroy.push_back(id);
         }
-    }
+    });
 
     // 销毁过期飘字
     for (EntityId id : toDestroy) {
@@ -216,12 +215,11 @@ void UpdateDamageTexts(Registry& registry, float dt) {
 // ============================================================================
 void RenderDamageTexts(Registry& registry, sf::RenderWindow& window,
                        const Camera& camera, const sf::Font& font) {
-    auto entities = registry.View<DamageTextComponent, Transform>();
 
-    for (EntityId id : entities) {
+    registry.ForEach<DamageTextComponent, Transform>([&](EntityId id) {
         DamageTextComponent* dmgText = registry.GetComponent<DamageTextComponent>(id);
         Transform* transform = registry.GetComponent<Transform>(id);
-        if (!dmgText || !transform) continue;
+        if (!dmgText || !transform) return;
 
         // 世界坐标 → 屏幕坐标
         sf::Vector2f screenPos = camera.WorldToScreen(transform->position);
@@ -303,7 +301,7 @@ void RenderDamageTexts(Registry& registry, sf::RenderWindow& window,
         }
 
         window.draw(text);
-    }
+    });
 }
 
 } // namespace cu

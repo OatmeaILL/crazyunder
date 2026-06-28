@@ -1012,14 +1012,13 @@ void Game::updatePlaying(float dt) {
     // 9. 更新空间网格
     uniformGrid_.Clear();
     if (playerTransform) {
-        auto enemies = registry_.View<EnemyComponent, Transform>();
-        for (EntityId id : enemies) {
+        registry_.ForEach<EnemyComponent, Transform>([&](EntityId id) {
             EnemyComponent* enemy = registry_.GetComponent<EnemyComponent>(id);
             Transform* t = registry_.GetComponent<Transform>(id);
             if (enemy && t && enemy->active) {
                 uniformGrid_.Insert(id, t->position);
             }
-        }
+        });
     }
 
     // 10. 更新敌人 AI
@@ -1065,14 +1064,13 @@ void Game::updatePlaying(float dt) {
     // 此处统一检测 HP 归零的敌人，触发 OnKill 回调（经验球、战利品、击杀计数）。
     {
         std::vector<EntityId> deadEnemies;
-        auto enemies = registry_.View<EnemyComponent, Health>();
-        for (EntityId id : enemies) {
+        registry_.ForEach<EnemyComponent, Health>([&](EntityId id) {
             EnemyComponent* enemy = registry_.GetComponent<EnemyComponent>(id);
             Health* health = registry_.GetComponent<Health>(id);
             if (enemy && health && enemy->active && health->current <= 0.f) {
                 deadEnemies.push_back(id);
             }
-        }
+        });
         for (EntityId id : deadEnemies) {
             EnemyComponent* enemy = registry_.GetComponent<EnemyComponent>(id);
             Transform* t = registry_.GetComponent<Transform>(id);
@@ -1105,8 +1103,8 @@ void Game::updatePlaying(float dt) {
 
     // 15.6 BOSS 检测：查找当前存活的 BOSS
     if (!bossActive_) {
-        auto enemies = registry_.View<EnemyComponent, Health>();
-        for (EntityId id : enemies) {
+        registry_.ForEach<EnemyComponent, Health>([&](EntityId id) {
+            if (bossActive_) return;  // 已找到，跳过后续
             EnemyComponent* enemy = registry_.GetComponent<EnemyComponent>(id);
             Health* health = registry_.GetComponent<Health>(id);
             if (enemy && health && enemy->active && enemy->type == EnemyType::Boss
@@ -1114,9 +1112,8 @@ void Game::updatePlaying(float dt) {
                 bossActive_ = true;
                 bossEntityId_ = id;
                 LOG_INFO("BOSS 出现！");
-                break;
             }
-        }
+        });
     }
 
     // 15.7 BOSS 回血：玩家离开 BOSS 房间 5 秒后，每秒回 2% 最大生命
@@ -2141,14 +2138,13 @@ void Game::renderPlaying(float /*alpha*/) {
     }
 
     // 2. 绘制所有拥有 Transform + Sprite 的实体
-    auto entities = registry_.View<Transform, Sprite>();
-    for (EntityId id : entities) {
+    registry_.ForEach<Transform, Sprite>([&](EntityId id) {
         Transform* t = registry_.GetComponent<Transform>(id);
         Sprite* s = registry_.GetComponent<Sprite>(id);
         if (t && s) {
             // 跳过非活跃敌人（已死亡但未回收）
             EnemyComponent* enemy = registry_.GetComponent<EnemyComponent>(id);
-            if (enemy && !enemy->active) continue;
+            if (enemy && !enemy->active) return;
 
             // ---- 第十六轮新增：根据状态效果染色敌人 sprite ----
             // 让玩家直观看到哪些敌人被燃烧/冰冻/中毒/麻痹：
@@ -2212,7 +2208,7 @@ void Game::renderPlaying(float /*alpha*/) {
             renderer_.DrawSprite(atlasTexture, t->position,
                                  s->sourceRect, renderColor, t->scale);
         }
-    }
+    });
 
     // 3. 绘制粒子
     particles_.Render(renderer_);
@@ -2709,21 +2705,20 @@ void Game::renderDoorHealthBars() {
 void Game::renderChampionHealthBars() {
     if (!dungeonInitialized_) return;
 
-    auto entities = registry_.View<Transform, EnemyComponent>();
-    for (EntityId id : entities) {
+    registry_.ForEach<Transform, EnemyComponent>([&](EntityId id) {
         EnemyComponent* enemy = registry_.GetComponent<EnemyComponent>(id);
-        if (!enemy || !enemy->active) continue;
+        if (!enemy || !enemy->active) return;
 
         // 第二十一轮：词缀敌人也显示血条（不仅是 Champion）
         const EnemyAffix* affix = registry_.GetComponent<EnemyAffix>(id);
         const bool hasAffix = (affix && affix->affixMask != 0u);
-        if (!enemy->isChampion && !hasAffix) continue;
+        if (!enemy->isChampion && !hasAffix) return;
 
         Transform* t = registry_.GetComponent<Transform>(id);
         Health* health = registry_.GetComponent<Health>(id);
-        if (!t || !health) continue;
+        if (!t || !health) return;
         // 已死亡的不渲染（Health.current <= 0）
-        if (health->current <= 0.f) continue;
+        if (health->current <= 0.f) return;
 
         // 计算血量比例
         float hpRatio = (health->max > 0.f) ? health->current / health->max : 0.f;
@@ -2794,7 +2789,7 @@ void Game::renderChampionHealthBars() {
                 window_.draw(affixLabel);
             }
         }
-    }
+    });
 }
 
 // ============================================================================
@@ -3576,15 +3571,14 @@ void Game::killAllEnemies() {
     if (!dungeonInitialized_) return;
     
     int killCount = 0;
-    auto enemies = registry_.View<EnemyComponent>();
-    for (EntityId id : enemies) {
+    registry_.ForEach<EnemyComponent>([&](EntityId id) {
         EnemyComponent* enemy = registry_.GetComponent<EnemyComponent>(id);
         Health* health = registry_.GetComponent<Health>(id);
         if (enemy && health && enemy->active) {
             health->current = 0;
             ++killCount;
         }
-    }
+    });
     LOG_INFO("已秒杀 %d 个敌人", killCount);
 }
 
@@ -4618,11 +4612,10 @@ void Game::updateDebugStats() {
 
     // 实体统计：遍历 registry 计数活跃敌人
     s.enemyCount = 0;
-    auto enemies = registry_.View<EnemyComponent>();
-    for (EntityId id : enemies) {
+    registry_.ForEach<EnemyComponent>([&](EntityId id) {
         EnemyComponent* ec = registry_.GetComponent<EnemyComponent>(id);
         if (ec && ec->active) ++s.enemyCount;
-    }
+    });
     s.projectileCount = projectileSystem_.GetActiveCount();
     s.particleCount = static_cast<int>(particles_.GetActiveCount());
     s.fissureCount = static_cast<int>(fissureZones_.size());
