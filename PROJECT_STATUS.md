@@ -1,6 +1,6 @@
-# CrazyUnder 项目状态总结（2026-06-29 第三十轮）
+# CrazyUnder 项目状态总结（2026-06-29 第三十一轮）
 
-> 本文档供新会话继承上下文使用。当前会话已完成三十轮开发，包含核心修复、系统扩展与体验优化。
+> 本文档供新会话继承上下文使用。当前会话已完成三十一轮开发，包含核心修复、系统扩展与体验优化。
 
 ## 四、本轮新增/修复内容（第十轮）
 
@@ -877,6 +877,107 @@ Suicide（自爆怪）和 CountdownSuicide（倒计时自爆怪）原版过于�
 ### 编译验证（第三十轮）
 - Release 版本编译成功（exit_code=0），仅重新编译改动文件（Renderer/Game/EnemyAI/CombatSystem/CombatEffects/Animation/RoomSystem/Registry）
 - 编译器报告：0 error, 0 new warning，仅历史遗留 C4244（`int→float`，无害）
+- 可执行文件：`build/bin/Release/crazyunder.exe`
+
+---
+
+## 四-u、第三十一轮新增/修复内容（帮助手册 + 死亡回顾 + 小地图标记 + 屏幕震动 + 阻碍房增强 + 物品叙事 + 动态事件 + 敌人 AI 改善）
+
+### 设计意图
+本轮聚焦"体验优化"和"敌人智能化"两大方向。通过帮助手册、死亡回顾、小地图标记提升 UI 信息密度；通过屏幕震动/顿帧增强打击感；通过敌人 AI 改善（挤开/侧移/伏击/预判）提升战斗策略深度；通过物品叙事和动态事件增强世界观沉浸感。
+
+### P1 功能：帮助手册（按 H 键）
+
+89. **帮助手册可重复查看**（Game.cpp + HUD 底部提示）
+    - Playing 状态按 H 键切换教程覆盖层，首次标题"操作指南"，H 键重开标题"帮助手册"
+    - H 键不会被"任意键关闭"逻辑拦截（`event.key.code != sf::Keyboard::H`）
+    - 按键列表新增"H 键 - 打开帮助手册"
+    - 底部 HUD 操作提示新增"H:帮助"
+    - 底部提示更新为"按任意键或点击鼠标关闭 | 游戏中按 H 重新打开"
+
+### P1 功能：死亡回顾系统
+
+90. **死亡结算扩展信息**（Game.cpp + Menus.h/.cpp + Player.h + CombatSystem.cpp + EnemyAI.cpp + EnemyAI.h）
+    - `PlayerComponent` 新增 `lastAttackerEntity` 和 `totalDamageDealt` 字段
+    - `CombatSystem::ApplyDamage` 中自动累计玩家总伤害（DPS 计算）和记录攻击者
+    - `EnemyAI.cpp` 近战接触伤害时记录最后攻击者
+    - 死亡结算屏幕新增三项信息：击杀者中文名（红色）、连击中断数（金色）、DPS（蓝色）
+    - 新增 `EnemyTypeChineseName()` 函数：近战兵/远程兵/自爆兵/精英怪/BOSS/隐身刺客/倒计时炸弹/分裂怪/盾卫/狙击手/施法者
+    - Champion 敌人击杀者名称前缀"Champion"
+
+### P1 功能：小地图标记
+
+91. **商人位置 $ 图标**（HUD.h/.cpp + Game.cpp）
+    - HUD 新增 `merchantPos_` 和 `merchantActive_` 字段，`SetMerchantPosition` 接口
+    - 商人活跃时小地图显示金色 "$" 图标
+    - 图例区域商人活跃时新增"$-商人"条目
+
+92. **宝箱房 ? 标记**（HUD.cpp）
+    - 未清理的宝箱房从 "T" 改为 "?"（黄色），清理后变为 "T"（金色）
+
+### P1 功能：屏幕震动与顿帧
+
+93. **顿帧系统（Hit Stop）**（Game.h/.cpp）
+    - `Game.h` 新增 `hitStopTimer_` 和三个常量（暴击 40ms / 击杀精英 60ms / 击杀 Boss 100ms）
+    - `updatePlaying` 开头检查 `hitStopTimer_ > 0`，跳过逻辑更新但仍递减计时器
+    - `setupPlayingScene` 和 `restartGame` 中重置 `hitStopTimer_`
+
+94. **震动触发点**（Game.cpp OnHit/OnKill + EnemyAI.cpp）
+    - 暴击命中：`camera_.Shake(4.f, 0.15f)` + 顿帧 40ms
+    - 击杀 Champion/Elite：`camera_.Shake(6.f, 0.2f)` + 顿帧 60ms
+    - 击杀 Boss：`camera_.Shake(10.f, 0.4f)` + 顿帧 100ms
+    - 玩家受伤（ApplyDamage）：`camera_.Shake(6.f, 0.2f)`
+    - 玩家受伤（接触伤害）：`UpdateEnemyAI` 新增 `float* shakeRequest` 输出参数，`Game.cpp` 调用后应用 `camera_.Shake`
+
+### P1 功能：阻碍房增强
+
+95. **石柱反弹子弹**（ProjectileSystem.cpp）
+    - 原逻辑：墙壁和石柱统一阻挡子弹
+    - 新逻辑：墙壁阻挡子弹（不变），石柱反弹子弹（反转速度方向，伤害衰减 50%，移出碰撞位避免连续反弹）
+    - 粒子反馈：击中石柱时生成火花粒子
+
+### P1 功能：物品描述叙事
+
+96. **圣物 lore 段**（RelicSystem.h/.cpp + Game.cpp）
+    - `RelicData` 新增 `const char* lore` 字段
+    - 12 种圣物各添加一段世界观背景故事（如"这是最后一位骑士团团长的徽章..."）
+    - 圣物查看面板（R 键）中每个已拥有圣物槽位底部显示 lore 文本（10pt 灰色斜体，自动换行）
+
+97. **技能 lore 段**（SkillSystem.h/.cpp）
+    - `SkillData` 新增 `const char* lore` 字段
+    - 5 个技能各添加一段世界观背景故事（如"大地之怒的呼唤。据说古代战士用这一击震碎了整座城墙。"）
+
+### P1 功能：动态事件叙述
+
+98. **事件房对话根据玩家 build 变化**（Game.cpp）
+    - 乞丐事件：持有"贪婪之眼"时→"你眼神贪婪...但心地善良"；高攻击力时→"你身上的杀气太重了...但谢谢你"
+    - 法师事件：持有"吸血鬼之牙"时→"你身上的黑暗气息...有趣"；高连击时→"你的战斗技艺令人赞叹"
+    - 祭坛事件：持有"守护之心"时→"祭坛与守护之心共鸣！"；高攻击力时→"你的力量已经很强大了...再强一些吧"
+
+### P2 敌人 AI 改善
+
+99. **近战敌人"挤开"行为**（EnemyAI.cpp）
+    - 当多个近战敌人在流场同一格时，给予随机横向偏移力（分离力的垂直向量 × 0.4 × 伪随机偏移）
+    - 避免敌人排成一列"排队送死"
+
+100. **远程敌人侧移**（EnemyAI.cpp）
+    - Ranged：合适距离时做垂直于玩家方向的横向移动（0.5x 移速），不再原地站桩
+    - SniperRanged：合适距离时做横向移动（0.6x 移速），增加被瞄准难度
+    - 用实体 ID 决定左/右方向，确保每个敌人行为一致但不同
+
+101. **隐身刺客伏击行为**（EnemyAI.cpp）
+    - 隐身时：不走流场，直接朝玩家直线移动（无视地形绕路，更智能的追踪）
+    - 显形瞬间：1.3x 加速冲刺 0.5s（复用 `specialTimer` 作为冲刺计时）
+    - 冲刺结束后恢复正常追击
+
+102. **自爆兵预判冲锋**（EnemyAI.cpp）
+    - 冲锋时（250px 内）获取玩家 Velocity，预测玩家移动方向
+    - 预测量 = 玩家速度 × 预测时间 × 60% 权重（避免过准）
+    - 预测时间限制在 0.1-0.4s，距离越近预测越准
+
+### 编译验证（第三十一轮）
+- Release 版本编译成功（exit_code=0），仅重新编译改动文件
+- 无新增警告，仅历史遗留（C4244/C4819/C4996）
 - 可执行文件：`build/bin/Release/crazyunder.exe`
 
 ---

@@ -46,6 +46,7 @@ struct SkillData {
     SkillType  type        = SkillType::Count;
     const char* name       = "";       // 中文名
     const char* desc       = "";       // 描述
+    const char* lore       = "";       // 叙事文本（世界观背景故事）
     float      cooldown    = 0.f;      // 冷却时间（秒）
     float      duration    = 0.f;      // 持续时间（0=瞬发）
     float      manaCost    = 0.f;      // 法力消耗

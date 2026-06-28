@@ -235,29 +235,11 @@ void Game::registerStates() {
                 LOG_WARN("灵魂碎片持久化失败（本次获得 %d 碎片）", shards);
             }
             deathScreen_.SetShardsGained(shards);
-            // 第三十轮新增：死亡回顾信息
-            std::string killerName = "";
-            int comboAtDeath = 0;
-            float dps = 0.f;
-            PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
-            if (pc) {
-                comboAtDeath = pc->comboCount;
-                if (survivalTime_ > 0.f) {
-                    dps = pc->totalDamageDealt / survivalTime_;
-                }
-                // 查找最后攻击者的敌人名称
-                if (pc->lastAttackerEntity != kInvalidEntity) {
-                    EnemyComponent* ec = registry_.GetComponent<EnemyComponent>(pc->lastAttackerEntity);
-                    if (ec) {
-                        killerName = EnemyTypeChineseName(ec->type);
-                        // Champion 敌人加上前缀
-                        if (ec->isChampion) {
-                            killerName = "Champion " + killerName;
-                        }
-                    }
-                }
-            }
-            deathScreen_.SetDeathReview(killerName, comboAtDeath, dps);
+            // 第三十轮新增：死亡回顾信息（使用预保存数据，因为 registry 已被 onExit 清空）
+            float dps = (survivalTime_ > 0.f) ? totalDamageDealt_ / survivalTime_ : 0.f;
+            deathScreen_.SetDeathReview(lastKillerName_, comboAtDeath_, dps);
+            LOG_INFO("死亡回顾: 击杀者=%s combo=%d dps=%.0f",
+                     lastKillerName_.empty() ? "无" : lastKillerName_.c_str(), comboAtDeath_, dps);
             LOG_INFO("本局死亡结算: 层数=%d 击杀=%d Boss=%d → 获得 %d 灵魂碎片",
                      currentLevel_, totalKillCount_, bossKillCountThisRun_, shards);
             deathScreen_.SetVisible(true);
@@ -313,6 +295,8 @@ void Game::setupPlayingScene(bool preserveProgress) {
     activeEventRoomIdx_ = -1;
     activeEventType_ = EventType::None;
     eventDialogVisible_ = false;
+    // 重置顿帧
+    hitStopTimer_ = 0.f;
 
     // ---- Phase 6: 生成地牢 ----
     dungeonSeed_ = static_cast<uint32_t>(std::time(nullptr));
@@ -619,11 +603,16 @@ void Game::setupPlayingScene(bool preserveProgress) {
 
             // Phase 8: 播放命中音效
             AudioManager::Instance().PlaySFX(AudioManager::kSFXHit);
+
+            // ---- 第三十一轮新增：屏幕震动 + 顿帧反馈 ----
+            if (info.isCritical && info.attacker == playerId_) {
+                // 暴击：轻微震动 + 短暂顿帧
+                camera_.Shake(4.f, 0.15f);
+                hitStopTimer_ = std::max(hitStopTimer_, kHitStopCrit);
+            }
         }
 
         // ---- 第十八轮新增：玩家受伤时重置连击 ----
-        // 设计意图：避免玩家无脑肉搏堆 combo。受伤意味着走位失败，应受惩罚。
-        // 仅当 target 是玩家时重置（攻击者是谁无所谓，敌人/Boss/FissureZone 都触发）。
         if (info.target == playerId_) {
             PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
             if (pc && pc->comboCount > 0) {
@@ -631,6 +620,8 @@ void Game::setupPlayingScene(bool preserveProgress) {
                 pc->comboCount = 0;
                 pc->comboTimer = 0.f;
             }
+            // ---- 第三十一轮新增：受伤屏幕震动 ----
+            camera_.Shake(6.f, 0.2f);
         }
     };
 
@@ -657,6 +648,17 @@ void Game::setupPlayingScene(bool preserveProgress) {
         EnemyComponent* victimEnemy = registry_.GetComponent<EnemyComponent>(victim);
         if (victimTransform && victimEnemy) {
             lootSystem_.OnEnemyKilled(victim, victimTransform->position, victimEnemy->type, victimEnemy->isChampion);
+
+            // ---- 第三十一轮新增：击杀精英/Boss 屏幕震动 + 顿帧 ----
+            if (killer == playerId_) {
+                if (victimEnemy->type == EnemyType::Boss) {
+                    camera_.Shake(10.f, 0.4f);
+                    hitStopTimer_ = std::max(hitStopTimer_, kHitStopBossKill);
+                } else if (victimEnemy->isChampion || victimEnemy->type == EnemyType::Elite) {
+                    camera_.Shake(6.f, 0.2f);
+                    hitStopTimer_ = std::max(hitStopTimer_, kHitStopEliteKill);
+                }
+            }
 
             // ---- 上报到任务/成就系统（框架）----
             questSystem_.OnEnemyKilled(victimEnemy->type, victimEnemy->isChampion);
@@ -939,6 +941,16 @@ PlayerSheetInfo Game::loadPlayerSpriteSheet() {
 // Playing 状态：更新逻辑
 // ============================================================================
 void Game::updatePlaying(float dt) {
+    // ---- 第三十一轮新增：顿帧系统 ----
+    // hitStopTimer_ > 0 时跳过逻辑更新（游戏时间冻结），但仍递减计时器
+    // 视觉效果：画面静止一瞬间，增强暴击/击杀精英的打击感
+    if (hitStopTimer_ > 0.f) {
+        hitStopTimer_ -= dt;
+        if (hitStopTimer_ < 0.f) hitStopTimer_ = 0.f;
+        // 顿帧期间仍更新摄像机（保持震动效果）和渲染，但跳过所有逻辑
+        return;
+    }
+
     // Phase 8: 升级选择激活时暂停玩法更新
     if (upgradeChoiceActive_) {
         upgradeMenu_.Update(dt);
@@ -1045,8 +1057,14 @@ void Game::updatePlaying(float dt) {
     }
 
     // 10. 更新敌人 AI
+    float aiShakeRequest = 0.f;
     lastAIUpdateTimeMs_ = UpdateEnemyAI(registry_, flowField_, uniformGrid_, playerId_, dt,
-                                        dungeonInitialized_ ? &dungeon_ : nullptr);
+                                        dungeonInitialized_ ? &dungeon_ : nullptr,
+                                        &aiShakeRequest);
+    // 第三十一轮新增：应用接触伤害震动请求
+    if (aiShakeRequest > 0.f) {
+        camera_.Shake(aiShakeRequest, 0.2f);
+    }
 
     // 11. 更新敌人生成器
     if (playerTransform) {
@@ -1187,6 +1205,29 @@ void Game::updatePlaying(float dt) {
         playerComp->stats.currentHp = playerHealth->current;
         // 玩家死亡判定
         if (playerHealth->current <= 0.f) {
+            // ---- 第三十一轮修复：在 ChangeState 前保存死亡回顾数据 ----
+            // 因为 ChangeState 会先调用 Playing.onExit（registry_.Clear()），
+            // 再调用 Dead.onEnter，届时所有实体数据已被清空
+            lastKillerName_ = "";
+            comboAtDeath_ = playerComp->comboCount;
+            totalDamageDealt_ = playerComp->totalDamageDealt;
+            if (survivalTime_ > 0.f) {
+                // DPS 在 Dead onEnter 中计算
+            }
+            if (playerComp->lastAttackerEntity != kInvalidEntity &&
+                registry_.IsAlive(playerComp->lastAttackerEntity)) {
+                EnemyComponent* ec = registry_.GetComponent<EnemyComponent>(playerComp->lastAttackerEntity);
+                if (ec) {
+                    lastKillerName_ = EnemyTypeChineseName(ec->type);
+                    if (ec->isChampion) {
+                        lastKillerName_ = "Champion " + lastKillerName_;
+                    }
+                }
+            }
+            LOG_INFO("死亡回顾预保存: 击杀者=%s combo=%d dmg=%.0f",
+                     lastKillerName_.empty() ? "无" : lastKillerName_.c_str(),
+                     comboAtDeath_, totalDamageDealt_);
+
             // 第二十二轮新增：重置 SurviveTime 任务进度（单次生命语义）
             questSystem_.OnPlayerDeath();
             ChangeState(GameState::Dead);
@@ -1586,8 +1627,40 @@ void Game::renderRelicPanel() {
             descText.setCharacterSize(13);
             descText.setFillColor(sf::Color(220, 220, 220));
             sf::FloatRect db = descText.getLocalBounds();
-            descText.setPosition(x + (slotW - db.width) * 0.5f, y + 110.f);
+            descText.setPosition(x + (slotW - db.width) * 0.5f, y + 108.f);
             window_.draw(descText);
+
+            // ---- 第三十一轮新增：圣物叙事文本（lore）----
+            if (rd.lore && rd.lore[0] != '\0') {
+                sf::Text loreText;
+                loreText.setFont(font);
+                loreText.setString(utf8ToSfString(rd.lore));
+                loreText.setCharacterSize(10);
+                loreText.setFillColor(sf::Color(160, 160, 180));
+                loreText.setStyle(sf::Text::Italic);
+                // 自动换行：每行最多 28 个字符
+                std::string loreStr(rd.lore);
+                std::string wrapped;
+                int charCount = 0;
+                for (size_t ci = 0; ci < loreStr.size();) {
+                    unsigned char c = static_cast<unsigned char>(loreStr[ci]);
+                    int charLen = 1;
+                    if ((c & 0xE0) == 0xC0) charLen = 2;
+                    else if ((c & 0xF0) == 0xE0) charLen = 3;
+                    else if ((c & 0xF8) == 0xF0) charLen = 4;
+                    wrapped += loreStr.substr(ci, charLen);
+                    ci += charLen;
+                    ++charCount;
+                    if (charCount >= 28 && ci < loreStr.size()) {
+                        wrapped += '\n';
+                        charCount = 0;
+                    }
+                }
+                loreText.setString(utf8ToSfString(wrapped));
+                sf::FloatRect lb = loreText.getLocalBounds();
+                loreText.setPosition(x + (slotW - lb.width) * 0.5f, y + 122.f);
+                window_.draw(loreText);
+            }
         } else {
             // 空缺占位
             sf::Text emptyText;
@@ -3167,6 +3240,9 @@ void Game::restartGame() {
     totalDamageDealt_ = 0.f;
     comboAtDeath_ = 0;
 
+    // 第三十一轮新增：重置顿帧
+    hitStopTimer_ = 0.f;
+
     // 重置 BOSS 状态
     bossActive_ = false;
     bossEntityId_ = kInvalidEntity;
@@ -4444,7 +4520,14 @@ void Game::handleEventInteraction() {
                     SpawnFloatText(registry_, pT->position, "+" + std::to_string(static_cast<int>(heal)) + " HP",
                                    sf::Color(80, 255, 80), 20, 1.5f);
                 }
-                SpawnFloatText(registry_, roomCenter, "乞丐: 谢谢你的善心！",
+                // ---- 第三十一轮新增：动态事件叙述 ----
+                std::string beggarText = "乞丐: 谢谢你的善心！";
+                if (relicSystem_.HasRelic(RelicType::GreedyEye)) {
+                    beggarText = "乞丐: 你眼神贪婪...但心地善良。";
+                } else if (pc->stats.damage > 80.f) {
+                    beggarText = "乞丐: 你身上的杀气太重了...但谢谢你。";
+                }
+                SpawnFloatText(registry_, roomCenter, beggarText,
                                sf::Color(255, 220, 100), 20, 2.0f);
                 AudioManager::Instance().PlaySFX(AudioManager::kSFXPickup);
                 LOG_INFO("乞丐事件: -50 金币, +100 经验, +20%% HP");
@@ -4468,7 +4551,14 @@ void Game::handleEventInteraction() {
                 ItemQuality quality = (q == 0) ? ItemQuality::Blue :
                                       (q == 1) ? ItemQuality::Yellow : ItemQuality::DarkGold;
                 lootSystem_.DropItem(pT->position, quality, currentLevel_);
-                SpawnFloatText(registry_, roomCenter, "神秘法师: 这件宝物归你了...",
+                // ---- 第三十一轮新增：动态事件叙述 ----
+                std::string mageText = "神秘法师: 这件宝物归你了...";
+                if (relicSystem_.HasRelic(RelicType::VampireFang)) {
+                    mageText = "神秘法师: 你身上的黑暗气息...有趣。收下吧。";
+                } else if (pc->comboCount >= 25) {
+                    mageText = "神秘法师: 你的战斗技艺令人赞叹。这是奖赏。";
+                }
+                SpawnFloatText(registry_, roomCenter, mageText,
                                sf::Color(180, 100, 255), 20, 2.0f);
                 AudioManager::Instance().PlaySFX(AudioManager::kSFXLevelUp);
                 LOG_INFO("法师事件: -30%% HP, 获得品质=%d 装备", static_cast<int>(quality));
@@ -4515,7 +4605,14 @@ void Game::handleEventInteraction() {
                 // 注意：若玩家有技能点会消耗 1 个，无技能点则不消耗
                 upgradeSystem_.ApplyUpgrade(UpgradeType::DamageUp);
                 recomputePlayerStats();
-                SpawnFloatText(registry_, roomCenter, "祭坛吸收了 " + std::to_string(cost) + " 金币，攻击力 +5",
+                // ---- 第三十一轮新增：动态事件叙述 ----
+                std::string altarText = "祭坛吸收了 " + std::to_string(cost) + " 金币，攻击力 +5";
+                if (relicSystem_.HasRelic(RelicType::Aegis)) {
+                    altarText = "祭坛与守护之心共鸣！攻击力 +5";
+                } else if (pc->stats.damage > 100.f) {
+                    altarText = "祭坛: 你的力量已经很强大了...再强一些吧。";
+                }
+                SpawnFloatText(registry_, roomCenter, altarText,
                                sf::Color(255, 180, 80), 20, 2.5f);
                 AudioManager::Instance().PlaySFX(AudioManager::kSFXLevelUp);
                 LOG_INFO("祭坛事件: -%d 金币, +5 攻击力", cost);

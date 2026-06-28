@@ -53,6 +53,7 @@ struct RelicData {
     RelicType  type      = RelicType::None;
     const char* name     = "";  // 中文名
     const char* desc     = "";  // 简短描述（用于选择 UI 与面板）
+    const char* lore     = "";  // 叙事文本（世界观背景故事）
     uint8_t    r         = 255; // 边框/图标色（用于 UI 区分）
     uint8_t    g         = 255;
     uint8_t    b         = 255;

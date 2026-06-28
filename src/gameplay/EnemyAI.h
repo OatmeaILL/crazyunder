@@ -181,7 +181,8 @@ struct EnemyComponent {
 // ============================================================================
 float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
                     const UniformGrid& grid, EntityId playerEntity, float dt,
-                    Dungeon* dungeon = nullptr);
+                    Dungeon* dungeon = nullptr,
+                    float* shakeRequest = nullptr);
 
 // ============================================================================
 // UpdateEnemyCombat —— 敌人战斗更新（Phase 5）

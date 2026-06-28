@@ -199,6 +199,13 @@ private:
     bool debugMode_ = false;             // F1 调试信息开关
     bool triggerExplosion_ = false;      // 空格触发爆炸（边沿触发标志）
 
+    // ---- 第三十一轮新增：顿帧系统（Hit Stop）----
+    // 暴击/击杀精英时短暂冻结游戏时间，增强打击感
+    float hitStopTimer_ = 0.f;           // 顿帧剩余时间（>0 时跳过逻辑更新）
+    static constexpr float kHitStopCrit = 0.04f;       // 暴击顿帧 40ms
+    static constexpr float kHitStopEliteKill = 0.06f;   // 击杀精英顿帧 60ms
+    static constexpr float kHitStopBossKill = 0.1f;     // 击杀 Boss 顿帧 100ms
+
     // ---- Phase 4: 敌人系统与流场 AI ----
     UniformGrid uniformGrid_;     // 空间网格（碰撞/邻近查询）
     FlowField flowField_;         // 流场寻路

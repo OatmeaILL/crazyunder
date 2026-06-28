@@ -411,7 +411,7 @@ void DeathScreen::Initialize(const sf::Font& font) {
     auto restartBtn = std::make_unique<Button>();
     restartBtn->SetFont(font);
     restartBtn->SetText("重新开始");
-    restartBtn->SetPosition(sf::Vector2f(440.f, 500.f));
+    restartBtn->SetPosition(sf::Vector2f(440.f, 560.f));
     restartBtn->SetSize(sf::Vector2f(180.f, 50.f));
     restartBtn->SetBackgroundColor(sf::Color(120, 60, 60));
     restartBtn->SetHoverColor(sf::Color(180, 90, 90));
@@ -423,7 +423,7 @@ void DeathScreen::Initialize(const sf::Font& font) {
     auto menuBtn = std::make_unique<Button>();
     menuBtn->SetFont(font);
     menuBtn->SetText("返回主菜单");
-    menuBtn->SetPosition(sf::Vector2f(660.f, 500.f));
+    menuBtn->SetPosition(sf::Vector2f(660.f, 560.f));
     menuBtn->SetSize(sf::Vector2f(180.f, 50.f));
     menuBtn->SetBackgroundColor(sf::Color(60, 80, 120));
     menuBtn->SetHoverColor(sf::Color(90, 120, 180));
@@ -477,41 +477,42 @@ void DeathScreen::Render(sf::RenderTarget& target) const {
             340.f);
         target.draw(stats);
 
-        // 第三十轮新增：死亡回顾信息
-        if (!killerName_.empty() || comboAtDeath_ > 0 || dps_ > 0.f) {
-            float reviewY = 430.f;
-            if (!killerName_.empty()) {
-                sf::Text killerText;
-                killerText.setFont(*font_);
-                killerText.setString(U8("击杀者: ") + utf8ToSfString(killerName_));
-                killerText.setCharacterSize(20);
-                killerText.setFillColor(sf::Color(255, 150, 150));
-                bounds = killerText.getLocalBounds();
-                killerText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
-                target.draw(killerText);
-                reviewY += 28.f;
-            }
-            if (comboAtDeath_ > 0) {
-                sf::Text comboText;
-                comboText.setFont(*font_);
-                comboText.setString(U8("连击中断: ") + std::to_string(comboAtDeath_));
-                comboText.setCharacterSize(20);
-                comboText.setFillColor(sf::Color(255, 220, 100));
-                bounds = comboText.getLocalBounds();
-                comboText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
-                target.draw(comboText);
-                reviewY += 28.f;
-            }
-            if (dps_ > 0.f) {
-                sf::Text dpsText;
-                dpsText.setFont(*font_);
-                dpsText.setString(U8("每秒伤害: ") + std::to_string(static_cast<int>(dps_)));
-                dpsText.setCharacterSize(20);
-                dpsText.setFillColor(sf::Color(200, 200, 255));
-                bounds = dpsText.getLocalBounds();
-                dpsText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
-                target.draw(dpsText);
-            }
+        // 第三十轮新增：死亡回顾信息（始终显示，即使部分数据为空）
+        {
+            float reviewY = 420.f;
+            // 击杀者
+            sf::Text killerText;
+            killerText.setFont(*font_);
+            killerText.setString(!killerName_.empty()
+                ? U8("击杀者: ") + utf8ToSfString(killerName_)
+                : U8("击杀者: 未知"));
+            killerText.setCharacterSize(20);
+            killerText.setFillColor(!killerName_.empty()
+                ? sf::Color(255, 150, 150) : sf::Color(160, 160, 160));
+            bounds = killerText.getLocalBounds();
+            killerText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
+            target.draw(killerText);
+            reviewY += 28.f;
+            // 连击中断
+            sf::Text comboText;
+            comboText.setFont(*font_);
+            comboText.setString(U8("连击中断: ") + std::to_string(comboAtDeath_));
+            comboText.setCharacterSize(20);
+            comboText.setFillColor(comboAtDeath_ > 0
+                ? sf::Color(255, 220, 100) : sf::Color(160, 160, 160));
+            bounds = comboText.getLocalBounds();
+            comboText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
+            target.draw(comboText);
+            reviewY += 28.f;
+            // DPS
+            sf::Text dpsText;
+            dpsText.setFont(*font_);
+            dpsText.setString(U8("每秒伤害: ") + std::to_string(static_cast<int>(dps_)));
+            dpsText.setCharacterSize(20);
+            dpsText.setFillColor(sf::Color(200, 200, 255));
+            bounds = dpsText.getLocalBounds();
+            dpsText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
+            target.draw(dpsText);
         }
 
         // 第二十四轮新增：灵魂碎片获得提示（Meta Progression 反馈）

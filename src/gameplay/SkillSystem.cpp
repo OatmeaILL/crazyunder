@@ -20,12 +20,22 @@ namespace cu {
 // 技能静态数据表
 // ============================================================================
 static const SkillData kSkillDataTable[] = {
-    // type,            name,        desc,                                cooldown, duration, manaCost
-    { SkillType::GroundSlam,  "震地波",   "范围伤害+击退+破甲",               7.f,  0.f,  20.f  },
-    { SkillType::LeechStrike, "吸血打击", "持续5s内攻击吸血30%",              11.f, 5.f,  15.f  },
-    { SkillType::Berserk,     "狂暴",     "+50%攻击+30%移速 受伤+20% 持续6s", 20.f, 6.f,  25.f  },
-    { SkillType::GravityWell, "引力井",   "拉扯周围敌人4秒",                  15.f, 4.f,  18.f  },
-    { SkillType::SpikeGround, "地刺",     "地面伤害区域5秒 减速+持续伤害",     12.f, 5.f,  20.f  },
+    // type,            name,        desc,                                lore, cooldown, duration, manaCost
+    { SkillType::GroundSlam,  "震地波",   "范围伤害+击退+破甲",
+        "大地之怒的呼唤。据说古代战士用这一击震碎了整座城墙。",
+        7.f,  0.f,  20.f  },
+    { SkillType::LeechStrike, "吸血打击", "持续5s内攻击吸血30%",
+        "黑暗契约的代价。每一次吸取敌人的生命，你都能感受到自己离深渊更近一步。",
+        11.f, 5.f,  15.f  },
+    { SkillType::Berserk,     "狂暴",     "+50%攻击+30%移速 受伤+20% 持续6s",
+        "狂战士的诅咒。当你失去理智的那一刻，你将获得前所未有的力量——但代价是什么？",
+        20.f, 6.f,  25.f  },
+    { SkillType::GravityWell, "引力井",   "拉扯周围敌人4秒",
+        "扭曲时空的禁术。据说创造它的法师最终被自己的法术吞噬。",
+        15.f, 4.f,  18.f  },
+    { SkillType::SpikeGround, "地刺",     "地面伤害区域5秒 减速+持续伤害",
+        "地底深处的恶意。大地会记住每一个践踏它的人。",
+        12.f, 5.f,  20.f  },
 };
 
 const SkillData& GetSkillData(SkillType type) {
@@ -33,7 +43,7 @@ const SkillData& GetSkillData(SkillType type) {
     if (idx >= 0 && idx < static_cast<int>(SkillType::Count)) {
         return kSkillDataTable[idx];
     }
-    static SkillData empty{SkillType::Count, "", "", 0.f, 0.f, 0.f};
+    static SkillData empty{SkillType::Count, "", "", "", 0.f, 0.f, 0.f};
     return empty;
 }
 

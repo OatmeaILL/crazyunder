@@ -296,10 +296,30 @@ void ProjectileSystem::Update(Registry& registry, UniformGrid& grid,
         if (dungeon && !dungeon->tiles.empty()) {
             sf::Vector2i tile = dungeon->WorldToTile(bulletTransform->position);
             TileType t = dungeon->GetTile(tile.x, tile.y);
-            if (t == TileType::Wall || t == TileType::IndestructibleObstacle) {
-                // 墙壁/不可破坏障碍物阻挡子弹：生成火花粒子
+            if (t == TileType::Wall) {
+                // 墙壁阻挡子弹：生成火花粒子
                 particles.HitSpark(bulletTransform->position);
                 releaseToPool(bulletId);
+                continue;
+            }
+            if (t == TileType::IndestructibleObstacle) {
+                // ---- 第三十一轮新增：石柱反弹子弹 ----
+                // 子弹击中不可破坏石柱时反弹回敌人方向，创造战术玩法
+                // 玩家可利用石柱反弹子弹攻击躲在掩体后的敌人
+                Velocity* vel = registry.GetComponent<Velocity>(bulletId);
+                if (vel) {
+                    // 反转速度方向（简单反弹）
+                    vel->linear = -vel->linear;
+                    // 粒子反馈
+                    particles.HitSpark(bulletTransform->position);
+                    // 标记子弹为"已反弹"避免重复反弹（用 damage 衰减 50% 作为惩罚）
+                    proj->damage *= 0.5f;
+                    // 将子弹移出石柱位置避免连续碰撞
+                    bulletTransform->position += vel->linear * 0.1f;
+                } else {
+                    particles.HitSpark(bulletTransform->position);
+                    releaseToPool(bulletId);
+                }
                 continue;
             }
             if (t == TileType::Obstacle) {

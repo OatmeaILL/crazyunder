@@ -69,7 +69,7 @@ static sf::Vector2f computeSeparation(sf::Vector2f selfPos, EntityId selfId,
 // ============================================================================
 float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
                     const UniformGrid& grid, EntityId playerEntity, float dt,
-                    Dungeon* dungeon) {
+                    Dungeon* dungeon, float* shakeRequest) {
     auto startTime = std::chrono::steady_clock::now();
 
     // 获取玩家位置（用于攻击判定与远程敌人距离保持）
@@ -646,6 +646,10 @@ float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
                             playerPc->comboCount = 0;
                             playerPc->comboTimer = 0.f;
                         }
+                    }
+                    // ---- 第三十一轮新增：接触伤害屏幕震动 ----
+                    if (shakeRequest) {
+                        *shakeRequest = std::max(*shakeRequest, 6.f);
                     }
                 }
                 // 重置攻击冷却（远程 2s，狙击 2.5s，其他 1s）
