@@ -67,7 +67,6 @@ struct WaveConfig {
     int splitterCount = 0;            // 分裂怪数量
     int shieldedCount = 0;            // 带盾怪数量
     int sniperCount = 0;              // 狙击远程数量
-    int casterCount = 0;              // 施法者数量
     float spawnInterval;     // 生成间隔（秒）
 };
 

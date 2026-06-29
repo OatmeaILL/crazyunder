@@ -91,6 +91,11 @@ void CombatSystem::ApplyDamage(Registry& registry, const DamageInfo& info) {
         PlayerComponent* attackerPc = registry.GetComponent<PlayerComponent>(info.attacker);
         if (attackerPc) {
             attackerPc->totalDamageDealt += finalDamage;
+            // 调试日志（仅首次和每 1000 伤害打印一次，避免刷屏）
+            if (attackerPc->totalDamageDealt <= finalDamage * 1.1f ||
+                static_cast<int>(attackerPc->totalDamageDealt) % 1000 < static_cast<int>(finalDamage)) {
+                LOG_INFO("[DPS追踪] 玩家造成 %.1f 伤害, 累计 %.1f", finalDamage, attackerPc->totalDamageDealt);
+            }
         }
     }
     // 当目标是玩家时，记录最后攻击者（用于死亡回顾击杀者显示）

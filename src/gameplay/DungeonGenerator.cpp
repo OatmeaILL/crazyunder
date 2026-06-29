@@ -528,7 +528,7 @@ void DungeonGenerator::assignRoomTypes(Dungeon& dungeon) {
         }
     }
 
-    // 事件房：1 个随机房间（5 种事件类型随机选 1）
+    // 事件房：1 个随机房间（4 种事件类型随机选 1）
     // totalRooms >= 4 时 50% 概率生成
     if (totalRooms >= 4 && randomChance(0.5f)) {
         for (int attempt = 0; attempt < 10; ++attempt) {
@@ -536,8 +536,8 @@ void DungeonGenerator::assignRoomTypes(Dungeon& dungeon) {
             if (idx == bossIdx) continue;
             if (dungeon.rooms[idx].type == RoomType::Normal) {
                 dungeon.rooms[idx].type = RoomType::Event;
-                // 随机选择事件类型（1-5）
-                int evtType = randomInt(1, 5);
+                // 随机选择事件类型（1-4）
+                int evtType = randomInt(1, 4);
                 dungeon.rooms[idx].eventType = static_cast<EventType>(evtType);
                 LOG_INFO("房间 %d 设为事件房 (事件类型=%s)",
                          idx, EventTypeName(dungeon.rooms[idx].eventType));

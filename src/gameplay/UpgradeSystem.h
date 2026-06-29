@@ -58,9 +58,7 @@ enum class UpgradeType : uint8_t {
     SkillBerserk      = 14, // 狂暴
     SkillGravityWell  = 15, // 引力井
     SkillSpikeGround  = 16, // 地刺
-    ManaRegen         = 17, // 法力回复 +2/s
-    DefenseUp         = 18, // 防御力 +3
-    Count             = 19  // 升级类型总数（哨兵）
+    Count             = 17  // 升级类型总数（哨兵）
 };
 
 // ---- 升级选项结构体 ----

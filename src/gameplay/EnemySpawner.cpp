@@ -21,10 +21,10 @@ static const EnemyPrototype kPrototypes[] = {
      sf::Color(150, 50, 200),  1.0f, "enemy_ranged"},
     // Suicide: 橙色三角形带引信，自爆（高速冲撞，接触爆炸）
     // 速度/伤害/爆炸范围均强化，威胁更高
-    {EnemyType::Suicide, 10.f, 350.f, 45.f, 40.f, 1.0f, 400.f,
+    {EnemyType::Suicide, 10.f, 280.f, 40.f, 40.f, 1.0f, 400.f,
      sf::Color(230, 130, 30),  1.0f, "enemy_suicide"},
-    // Elite: 金色带光环，精英（带词缀），基础 HP 250 保证精英的威胁度
-    {EnemyType::Elite,   250.f, 70.f, 15.f, 28.f, 1.2f, 400.f,
+    // Elite: 金色带光环，精英（带词缀）
+    {EnemyType::Elite,   100.f, 70.f, 15.f, 28.f, 1.2f, 400.f,
      sf::Color(220, 180, 50),  1.3f, "enemy_elite"},
     // Boss: 暗红色大圆形带角，Boss（体型 2x）
     {EnemyType::Boss,    1000.f,40.f, 30.f, 40.f, 1.5f, 500.f,
@@ -35,7 +35,7 @@ static const EnemyPrototype kPrototypes[] = {
     {EnemyType::StealthMelee, 25.f, 240.f, 8.f, 22.f, 1.2f, 400.f,
      sf::Color(100, 200, 200), 1.0f, "enemy_stealth"},
     // CountdownSuicide: 亮红色，靠近后激活倒计时自爆（伤害更高）
-    {EnemyType::CountdownSuicide, 15.f, 200.f, 40.f, 20.f, 1.0f, 400.f,
+    {EnemyType::CountdownSuicide, 15.f, 100.f, 35.f, 20.f, 1.0f, 350.f,
      sf::Color(255, 80, 80),   1.0f, "enemy_countdown"},
     // Splitter: 绿色，死亡时分裂成 2 个小怪
     {EnemyType::Splitter, 30.f, 70.f, 6.f, 22.f, 1.0f, 400.f,
@@ -46,11 +46,6 @@ static const EnemyPrototype kPrototypes[] = {
     // SniperRanged: 暗青色，超远距离高伤害狙击（靠近时快速撤退）
     {EnemyType::SniperRanged, 18.f, 70.f, 12.f, 500.f, 2.5f, 550.f,
      sf::Color(60, 180, 160),  1.0f, "enemy_sniper"},
-    // Caster: 紫红色法袍，中距离引导地面 AoE（延迟爆炸，创造走位压力）
-    // 基础 HP=25，移速慢，伤害中等，施法冷却 3.5s，检测范围 400px
-    // 行为：保持 200-300px 距离，在玩家脚下召唤 1.5s 预警的 AoE 法阵
-    {EnemyType::Caster, 25.f, 55.f, 8.f, 300.f, 3.5f, 400.f,
-     sf::Color(180, 60, 160),   1.0f, "enemy_caster"},
 };
 
 static constexpr int kPrototypeCount = static_cast<int>(sizeof(kPrototypes) / sizeof(kPrototypes[0]));
@@ -290,12 +285,6 @@ EntityId EnemySpawner::SpawnEnemyAt(EnemyType type, sf::Vector2f position, bool 
         enemy->rangedAttackTimer = (type == EnemyType::Boss) ? 1.f : 0.f;
         enemy->summonTimer = (type == EnemyType::Boss) ? 3.f : 0.f;
         enemy->isBossMinion = false;
-        // ---- 重置施法者专属字段 ----
-        enemy->castTimer = (type == EnemyType::Caster) ? 1.5f : 0.f; // 初始延迟，避免立即施法
-        enemy->castActive = 0.f;
-        enemy->castTargetPos = sf::Vector2f(0.f, 0.f);
-        enemy->castWarningRadius = 80.f;
-        enemy->castWarningLifetime = 0.f;
     }
 
     // ---- 第二十一轮新增：激活 EnemyAffix 精英词缀系统 ----
@@ -369,7 +358,7 @@ EntityId EnemySpawner::SpawnEnemyAt(EnemyType type, sf::Vector2f position, bool 
         velocity->linear = sf::Vector2f(0.f, 0.f);
     }
 
-    // ---- 隐身怪初始完全隐身（进入显形范围后才会显示）----
+    // ---- 隐身怪初始完全隐身（进入显形范围后才会显示） ----
     if (type == EnemyType::StealthMelee) {
         Sprite* sp = registry_->GetComponent<Sprite>(id);
         if (sp) {
@@ -378,14 +367,6 @@ EntityId EnemySpawner::SpawnEnemyAt(EnemyType type, sf::Vector2f position, bool 
         EnemyComponent* ec = registry_->GetComponent<EnemyComponent>(id);
         if (ec) {
             ec->isStealth = true;
-        }
-    }
-
-    // ---- 施法者初始暗紫红色渲染 ----
-    if (type == EnemyType::Caster) {
-        Sprite* sp = registry_->GetComponent<Sprite>(id);
-        if (sp) {
-            sp->color = sf::Color(180, 60, 160, 255); // 暗紫红色
         }
     }
 
@@ -439,14 +420,12 @@ WaveConfig EnemySpawner::generateWaveConfig(int waveNumber) const {
     config.shieldedCount = (waveNumber >= 4) ? 1 + waveNumber / 4 : 0;
     // 狙击远程：第 3 波开始（高伤害远程威胁，数量少）
     config.sniperCount = (waveNumber >= 3) ? 1 + waveNumber / 4 : 0;
-    // 施法者：第 2 波开始（AoE 范围伤害，创造走位压力）
-    config.casterCount = (waveNumber >= 2) ? 1 + waveNumber / 3 : 0;
 
     config.totalEnemies = config.meleeCount + config.rangedCount +
                           config.suicideCount + config.eliteCount + config.bossCount +
                           config.stealthCount + config.countdownSuicideCount +
                           config.splitterCount + config.shieldedCount +
-                          config.sniperCount + config.casterCount;
+                          config.sniperCount;
     // 生成间隔随波次缩短（但最小 0.02s）
     config.spawnInterval = std::max(0.02f, 0.15f - waveNumber * 0.01f);
 
@@ -475,18 +454,16 @@ void EnemySpawner::StartWave(int waveNumber) {
     for (int i = 0; i < config.splitterCount; ++i)          spawnQueue_.push_back(EnemyType::Splitter);
     for (int i = 0; i < config.shieldedCount; ++i)          spawnQueue_.push_back(EnemyType::Shielded);
     for (int i = 0; i < config.sniperCount; ++i)            spawnQueue_.push_back(EnemyType::SniperRanged);
-    for (int i = 0; i < config.casterCount; ++i)           spawnQueue_.push_back(EnemyType::Caster);
 
     totalToSpawn_ = config.totalEnemies;
     spawnedCount_ = 0;
 
     LOG_INFO("波次 %d 开始: 总数=%d (近战=%d, 远程=%d, 自爆=%d, 精英=%d, Boss=%d, "
-             "隐身=%d, 倒计时=%d, 分裂=%d, 带盾=%d, 狙击=%d, 施法者=%d), 间隔=%.3fs",
+             "隐身=%d, 倒计时=%d, 分裂=%d, 带盾=%d, 狙击=%d), 间隔=%.3fs",
              waveNumber, config.totalEnemies, config.meleeCount, config.rangedCount,
              config.suicideCount, config.eliteCount, config.bossCount,
              config.stealthCount, config.countdownSuicideCount,
              config.splitterCount, config.shieldedCount, config.sniperCount,
-             config.casterCount,
              config.spawnInterval);
 }
 

@@ -90,8 +90,6 @@ int UpgradeSystem::GetMaxLevel(UpgradeType type) noexcept {
         case UpgradeType::SkillGravityWell:
         case UpgradeType::SkillSpikeGround:
             return kSkillMaxLevel;
-        case UpgradeType::ManaRegen:         return 5;
-        case UpgradeType::DefenseUp:         return 5;
         default: return 1;
     }
 }
@@ -118,8 +116,6 @@ const char* UpgradeSystem::GetUpgradeName(UpgradeType type) noexcept {
         case UpgradeType::SkillBerserk:      return "狂暴";
         case UpgradeType::SkillGravityWell:  return "引力井";
         case UpgradeType::SkillSpikeGround:  return "地刺";
-        case UpgradeType::ManaRegen:         return "法力回复";
-        case UpgradeType::DefenseUp:         return "防御强化";
         default: return "?";
     }
 }
@@ -146,8 +142,6 @@ std::string UpgradeSystem::GetUpgradeDescription(UpgradeType type) noexcept {
         case UpgradeType::SkillBerserk:      return "+50%攻击+30%移速 受伤+20% 持续6s CD20s";
         case UpgradeType::SkillGravityWell:  return "拉扯周围敌人4秒 CD15s";
         case UpgradeType::SkillSpikeGround:  return "地面伤害区域5秒 减速 CD12s";
-        case UpgradeType::ManaRegen:         return "+2 每秒法力回复";
-        case UpgradeType::DefenseUp:         return "+3 防御力";
         default: return "?";
     }
 }

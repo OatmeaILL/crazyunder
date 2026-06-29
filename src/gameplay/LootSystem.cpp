@@ -291,106 +291,15 @@ std::string LootSystem::generateItemName(ItemQuality q, ItemSlot s) const {
 Affix LootSystem::rollSingleAffix(const Item& item, float qualityMultiplier) const {
     Affix affix;
     // 随机选择词缀类型（避免与已有词缀重复）
-    // 根据槽位调整可用词缀池：胸甲偏向防御，靴子偏向移速，武器偏向攻击
     std::vector<AffixType> available;
-    struct SlotAffixWeight { AffixType type; int weight; };
-    std::vector<SlotAffixWeight> weightedPool;
-    
-    // 按槽位构建加权词缀池
-    switch (item.slot) {
-        case ItemSlot::Chest:
-            weightedPool = {
-                {AffixType::AddedDefense, 4},  // 防御（高权重，防具核心属性）
-                {AffixType::MaxHp,        3},  // 生命
-                {AffixType::AddedDamage,  1},  // 伤害
-                {AffixType::MaxMp,        1},  // 法力
-                {AffixType::AttackSpeed,  1},  // 攻速
-                {AffixType::CritRate,     1},  // 暴击
-                {AffixType::CritDamage,   1},  // 爆伤
-                {AffixType::MoveSpeed,    1},
-                {AffixType::Lifesteal,    1},
-            };
-            break;
-        case ItemSlot::Weapon:
-            weightedPool = {
-                {AffixType::AddedDamage,  4},
-                {AffixType::AttackSpeed,  3},
-                {AffixType::CritRate,     2},
-                {AffixType::CritDamage,   2},
-                {AffixType::AddedDefense, 1},
-                {AffixType::MaxHp,        1},
-                {AffixType::MaxMp,        1},
-                {AffixType::MoveSpeed,    1},
-                {AffixType::Lifesteal,    1},
-            };
-            break;
-        case ItemSlot::Boots:
-            weightedPool = {
-                {AffixType::MoveSpeed,    4},
-                {AffixType::AddedDefense, 2},
-                {AffixType::MaxHp,        2},
-                {AffixType::AddedDamage,  1},
-                {AffixType::AttackSpeed,  1},
-                {AffixType::CritRate,     1},
-                {AffixType::CritDamage,   1},
-                {AffixType::MaxMp,        1},
-                {AffixType::Lifesteal,    1},
-            };
-            break;
-        case ItemSlot::Helmet:
-            weightedPool = {
-                {AffixType::MaxHp,        3},
-                {AffixType::AddedDefense, 3},
-                {AffixType::MaxMp,        2},
-                {AffixType::CritRate,     2},
-                {AffixType::CritDamage,   1},
-                {AffixType::AddedDamage,  1},
-                {AffixType::AttackSpeed,  1},
-                {AffixType::MoveSpeed,    1},
-                {AffixType::Lifesteal,    1},
-            };
-            break;
-        case ItemSlot::Ring:
-            weightedPool = {
-                {AffixType::CritRate,     3},
-                {AffixType::CritDamage,   3},
-                {AffixType::AddedDamage,  2},
-                {AffixType::AttackSpeed,  1},
-                {AffixType::MoveSpeed,    1},
-                {AffixType::AddedDefense, 1},
-                {AffixType::MaxHp,        1},
-                {AffixType::MaxMp,        1},
-                {AffixType::Lifesteal,    1},
-            };
-            break;
-        case ItemSlot::Amulet:
-            weightedPool = {
-                {AffixType::MaxMp,        3},
-                {AffixType::MaxHp,        2},
-                {AffixType::Lifesteal,    2},
-                {AffixType::AddedDefense, 1},
-                {AffixType::AddedDamage,  1},
-                {AffixType::CritRate,     1},
-                {AffixType::CritDamage,   1},
-                {AffixType::AttackSpeed,  1},
-                {AffixType::MoveSpeed,    1},
-            };
-            break;
-    }
-    
-    // 展开权重池，跳过已有词缀和 None
-    for (const auto& w : weightedPool) {
+    for (int i = 0; i <= 8; ++i) {
+        AffixType t = static_cast<AffixType>(i);
         bool dup = false;
         for (const auto& a : item.affixes) {
-            if (a.type == w.type) { dup = true; break; }
+            if (a.type == t) { dup = true; break; }
         }
-        if (!dup) {
-            for (int i = 0; i < w.weight; ++i) {
-                available.push_back(w.type);
-            }
-        }
+        if (!dup) available.push_back(t);
     }
-    
     if (available.empty()) {
         affix.type = AffixType::AddedDamage;
         affix.value = 0.f;

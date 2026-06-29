@@ -55,6 +55,13 @@ add_executable(crazyunder
     src/core/ResourceManager.cpp
     src/core/Input.cpp
     src/core/Game.cpp
+    src/core/Game_Scene.cpp
+    src/core/Game_Update.cpp
+    src/core/Game_Render.cpp
+    src/core/Game_Interaction.cpp
+    src/core/Game_SaveLoad.cpp
+    src/core/Game_Modifiers.cpp
+    src/core/Game_Debug.cpp
     src/core/AudioManager.cpp
     src/core/SaveSystem.cpp
     src/ecs/Registry.cpp

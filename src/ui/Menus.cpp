@@ -407,11 +407,11 @@ DeathScreen::DeathScreen() {
 void DeathScreen::Initialize(const sf::Font& font) {
     font_ = &font;
 
-    // Restart 按钮
+    // Restart 按钮（位置在 Initialize 中设置，使用相对比例）
     auto restartBtn = std::make_unique<Button>();
     restartBtn->SetFont(font);
     restartBtn->SetText("重新开始");
-    restartBtn->SetPosition(sf::Vector2f(440.f, 560.f));
+    restartBtn->SetPosition(sf::Vector2f(440.f, 530.f));
     restartBtn->SetSize(sf::Vector2f(180.f, 50.f));
     restartBtn->SetBackgroundColor(sf::Color(120, 60, 60));
     restartBtn->SetHoverColor(sf::Color(180, 90, 90));
@@ -423,7 +423,7 @@ void DeathScreen::Initialize(const sf::Font& font) {
     auto menuBtn = std::make_unique<Button>();
     menuBtn->SetFont(font);
     menuBtn->SetText("返回主菜单");
-    menuBtn->SetPosition(sf::Vector2f(660.f, 560.f));
+    menuBtn->SetPosition(sf::Vector2f(660.f, 530.f));
     menuBtn->SetSize(sf::Vector2f(180.f, 50.f));
     menuBtn->SetBackgroundColor(sf::Color(60, 80, 120));
     menuBtn->SetHoverColor(sf::Color(90, 120, 180));
@@ -441,8 +441,15 @@ void DeathScreen::SetStats(int kills, int level, float survivalTime) {
 void DeathScreen::Render(sf::RenderTarget& target) const {
     if (!visible_) return;
 
+    // 获取当前视口尺寸（适配不同分辨率）
+    sf::Vector2f viewSize = target.getView().getSize();
+    float screenW = viewSize.x;
+    float screenH = viewSize.y;
+    float centerX = screenW * 0.5f;
+    float centerY = screenH * 0.5f;
+
     // 暗红色背景
-    sf::RectangleShape overlay(sf::Vector2f(1280.f, 720.f));
+    sf::RectangleShape overlay(viewSize);
     overlay.setFillColor(sf::Color(40, 10, 10, 220));
     target.draw(overlay);
 
@@ -457,80 +464,100 @@ void DeathScreen::Render(sf::RenderTarget& target) const {
         title.setOutlineColor(sf::Color(60, 0, 0));
         title.setOutlineThickness(4.f);
         sf::FloatRect bounds = title.getLocalBounds();
-        title.setPosition(
-            (1280.f - bounds.width) * 0.5f,
-            180.f);
+        title.setPosition(centerX - bounds.width * 0.5f, screenH * 0.18f);
         target.draw(title);
 
-        // 统计信息
+        // 统计信息（居中，标题下方）
         sf::Text stats;
         stats.setFont(*font_);
         stats.setString(
             U8("击杀: ") + std::to_string(kills_) +
-            U8("\n等级: ") + std::to_string(level_) +
-            U8("\n存活: ") + std::to_string(static_cast<int>(survivalTime_)) + U8("秒"));
-        stats.setCharacterSize(28);
+            U8("  |  等级: ") + std::to_string(level_) +
+            U8("  |  存活: ") + std::to_string(static_cast<int>(survivalTime_)) + U8("秒"));
+        stats.setCharacterSize(26);
         stats.setFillColor(sf::Color(220, 200, 200));
         bounds = stats.getLocalBounds();
-        stats.setPosition(
-            (1280.f - bounds.width) * 0.5f,
-            340.f);
+        stats.setPosition(centerX - bounds.width * 0.5f, screenH * 0.38f);
         target.draw(stats);
 
-        // 第三十轮新增：死亡回顾信息（始终显示，即使部分数据为空）
+        // ---- 死亡回顾面板（左侧独立框）----
         {
-            float reviewY = 420.f;
+            float boxW = 280.f;
+            float boxH = 160.f;
+            float boxX = screenW * 0.08f;
+            float boxY = screenH * 0.45f;
+
+            // 背景框
+            sf::RectangleShape box(sf::Vector2f(boxW, boxH));
+            box.setPosition(boxX, boxY);
+            box.setFillColor(sf::Color(15, 15, 25, 230));
+            box.setOutlineColor(sf::Color(180, 120, 80));
+            box.setOutlineThickness(2.f);
+            target.draw(box);
+
+            // 标题
+            sf::Text boxTitle;
+            boxTitle.setFont(*font_);
+            boxTitle.setString(U8("死亡回顾"));
+            boxTitle.setCharacterSize(18);
+            boxTitle.setStyle(sf::Text::Bold);
+            boxTitle.setFillColor(sf::Color(255, 200, 120));
+            boxTitle.setPosition(boxX + 12.f, boxY + 8.f);
+            target.draw(boxTitle);
+
+            float lineY = boxY + 36.f;
+            float lineH = 30.f;
+            float textX = boxX + 16.f;
+
             // 击杀者
             sf::Text killerText;
             killerText.setFont(*font_);
-            killerText.setString(!killerName_.empty()
-                ? U8("击杀者: ") + utf8ToSfString(killerName_)
-                : U8("击杀者: 未知"));
-            killerText.setCharacterSize(20);
-            killerText.setFillColor(!killerName_.empty()
-                ? sf::Color(255, 150, 150) : sf::Color(160, 160, 160));
-            bounds = killerText.getLocalBounds();
-            killerText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
+            killerText.setCharacterSize(16);
+            if (!killerName_.empty()) {
+                killerText.setString(U8("击杀者: ") + utf8ToSfString(killerName_));
+                killerText.setFillColor(sf::Color(255, 150, 150));
+            } else {
+                killerText.setString(U8("击杀者: 未知"));
+                killerText.setFillColor(sf::Color(140, 140, 140));
+            }
+            killerText.setPosition(textX, lineY);
             target.draw(killerText);
-            reviewY += 28.f;
+            lineY += lineH;
+
             // 连击中断
             sf::Text comboText;
             comboText.setFont(*font_);
+            comboText.setCharacterSize(16);
             comboText.setString(U8("连击中断: ") + std::to_string(comboAtDeath_));
-            comboText.setCharacterSize(20);
             comboText.setFillColor(comboAtDeath_ > 0
-                ? sf::Color(255, 220, 100) : sf::Color(160, 160, 160));
-            bounds = comboText.getLocalBounds();
-            comboText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
+                ? sf::Color(255, 220, 100) : sf::Color(140, 140, 140));
+            comboText.setPosition(textX, lineY);
             target.draw(comboText);
-            reviewY += 28.f;
+            lineY += lineH;
+
             // DPS
             sf::Text dpsText;
             dpsText.setFont(*font_);
+            dpsText.setCharacterSize(16);
             dpsText.setString(U8("每秒伤害: ") + std::to_string(static_cast<int>(dps_)));
-            dpsText.setCharacterSize(20);
-            dpsText.setFillColor(sf::Color(200, 200, 255));
-            bounds = dpsText.getLocalBounds();
-            dpsText.setPosition((1280.f - bounds.width) * 0.5f, reviewY);
+            dpsText.setFillColor(sf::Color(180, 200, 255));
+            dpsText.setPosition(textX, lineY);
             target.draw(dpsText);
         }
 
-        // 第二十四轮新增：灵魂碎片获得提示（Meta Progression 反馈）
-        // 设计意图：让玩家在死亡时看到"获得了什么"，将挫败感转化为"下一局更强"的期待
-        if (shardsGained_ > 0) {
-            sf::Text shardText;
-            shardText.setFont(*font_);
-            shardText.setString(
-                U8("灵魂碎片 +") + std::to_string(shardsGained_) +
-                U8("  (可在主菜单\"灵魂之井\"中兑换永久强化)"));
-            shardText.setCharacterSize(20);
-            shardText.setFillColor(sf::Color(220, 180, 255));
-            bounds = shardText.getLocalBounds();
-            shardText.setPosition(
-                (1280.f - bounds.width) * 0.5f,
-                460.f);
-            target.draw(shardText);
-        }
+        // 灵魂碎片获得提示（居中，按钮上方）
+         if (shardsGained_ > 0) {
+             sf::Text shardText;
+             shardText.setFont(*font_);
+             shardText.setString(
+                 U8("灵魂碎片 +") + std::to_string(shardsGained_) +
+                 U8("  (可在主菜单\"灵魂之井\"中兑换永久强化)"));
+             shardText.setCharacterSize(18);
+             shardText.setFillColor(sf::Color(220, 180, 255));
+             bounds = shardText.getLocalBounds();
+             shardText.setPosition(centerX - bounds.width * 0.5f, screenH * 0.68f);
+             target.draw(shardText);
+         }
     }
 
     // 渲染子元素（按钮）
