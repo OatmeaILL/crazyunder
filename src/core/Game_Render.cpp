@@ -525,6 +525,11 @@ void Game::renderPlaying(float /*alpha*/) {
     if (tutorialVisible_) {
         renderTutorial();
     }
+
+    // ---- 第三十三轮新增：对话系统渲染（顶层，在最前面）----
+    if (dialogueSystem_.IsActive()) {
+        renderDialogueBox();
+    }
 }
 
 // ============================================================================

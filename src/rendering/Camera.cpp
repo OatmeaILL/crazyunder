@@ -23,8 +23,11 @@ void Camera::SetPosition(sf::Vector2f pos) noexcept {
 }
 
 void Camera::Shake(float magnitude, float duration) noexcept {
+    // 防御性：duration 为 0 时不触发震动
+    if (duration <= 0.f) return;
     // 新震动若更强则覆盖当前震动
-    if (magnitude > shakeMagnitude_ * (shakeTimer_ / shakeDuration_)) {
+    float currentRatio = (shakeDuration_ > 0.f) ? (shakeTimer_ / shakeDuration_) : 0.f;
+    if (magnitude > shakeMagnitude_ * currentRatio) {
         shakeMagnitude_ = magnitude;
         shakeDuration_ = duration;
         shakeTimer_ = duration;

@@ -51,9 +51,6 @@ endif()
 # ----------------------------------------------------------------------------
 add_executable(crazyunder
     src/main.cpp
-    src/core/Time.cpp
-    src/core/ResourceManager.cpp
-    src/core/Input.cpp
     src/core/Game.cpp
     src/core/Game_Scene.cpp
     src/core/Game_Update.cpp
@@ -62,6 +59,9 @@ add_executable(crazyunder
     src/core/Game_SaveLoad.cpp
     src/core/Game_Modifiers.cpp
     src/core/Game_Debug.cpp
+    src/core/Time.cpp
+    src/core/ResourceManager.cpp
+    src/core/Input.cpp
     src/core/AudioManager.cpp
     src/core/SaveSystem.cpp
     src/ecs/Registry.cpp
@@ -94,6 +94,7 @@ add_executable(crazyunder
     src/gameplay/RelicSystem.cpp
     src/gameplay/FloorModifier.cpp
     src/gameplay/SoulMemorySystem.cpp
+    src/gameplay/DialogueSystem.cpp
     src/rendering/TileMap.cpp
     src/ui/UIManager.cpp
     src/ui/HUD.cpp
@@ -101,6 +102,7 @@ add_executable(crazyunder
     src/ui/QuestMenu.cpp
     src/ui/AchievementMenu.cpp
     src/ui/SoulWellMenu.cpp
+    src/ui/DialogueBoxUI.cpp
     src/utils/TextureGenerator.cpp
     src/utils/UniformGrid.cpp
 )

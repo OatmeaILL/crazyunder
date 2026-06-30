@@ -299,4 +299,17 @@ enum class EliteAffix : uint32_t {
     }
 }
 
+// ============================================================================
+// NPCComponent —— 可对话 NPC 组件（第三十三轮新增）
+// ----------------------------------------------------------------------------
+// 标记实体为可对话 NPC，包含对话树引用 ID。
+// 对话树 ID 指向 DialogueSystem 中注册的对话树。
+// ============================================================================
+struct NPCComponent {
+    int dialogueTreeId = -1;  // 对话树 ID（-1 = 无对话）
+    bool dialogueTriggered = false; // 对话是否已触发过（防止重复触发）
+    const char* npcName = nullptr;  // NPC 名称（中文，用于交互提示）
+    const char* interactHint = nullptr; // 交互提示文本（如"按 E 对话"）
+};
+
 } // namespace cu

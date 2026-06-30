@@ -37,34 +37,6 @@ inline constexpr float kSuicideExplodeRange = 160.f;
 //
 // 参数：
 //   selfPos: 当前敌人位置
-//   selfId: 当前敌人实体 ID（排除自身）
-//   grid: 已插入所有敌人位置的空间网格
-//   neighbors: 复用的临时缓冲（避免每次调用都分配）
-//
-// 返回：分离力向量（未归一化的累加值）
-// ============================================================================
-static sf::Vector2f computeSeparation(sf::Vector2f selfPos, EntityId selfId,
-                                       const UniformGrid& grid,
-                                       std::vector<EntityId>& neighbors) {
-    neighbors.clear();
-    grid.QueryRange(selfPos, kSeparationRadius, neighbors);
-
-    sf::Vector2f separation(0.f, 0.f);
-    int count = 0;
-
-    for (EntityId otherId : neighbors) {
-        if (otherId == selfId) continue; // 排除自身
-
-        // 注意：这里无法直接获取邻居位置（函数签名未传 Registry）
-        // 分离力计算需要邻居位置，因此在 UpdateEnemyAI 中内联实现
-        // 此函数仅作为参考，实际逻辑在 UpdateEnemyAI 中
-    }
-    (void)separation;
-    (void)count;
-    return separation;
-}
-
-// ============================================================================
 // UpdateEnemyAI —— 敌人 AI 主更新
 // ============================================================================
 float UpdateEnemyAI(Registry& registry, const FlowField& flowField,
@@ -745,7 +717,11 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
                         dmg.amount = enemy->damage * 2.5f; // 自爆伤害翻2.5倍
                         dmg.isCritical = false;
                         dmg.element = ElementType::Fire;
-                        dmg.knockback = sf::Vector2f(350.f, 350.f); // 大击退，给玩家强烈的冲击反馈
+                        // 击退方向：从爆炸中心指向玩家（而非固定右下45°）
+                        sf::Vector2f toPlayer = playerPos - myPos;
+                        float dist = std::sqrt(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y);
+                        if (dist > 0.f) toPlayer /= dist;
+                        dmg.knockback = toPlayer * 350.f; // 大击退，给玩家强烈的冲击反馈
                         combat.ApplyDamage(registry, dmg);
                     }
                 }
@@ -776,7 +752,11 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
                         dmg.amount = enemy->damage * 2.5f; // 倒计时自爆伤害更高
                         dmg.isCritical = false;
                         dmg.element = ElementType::Fire;
-                        dmg.knockback = sf::Vector2f(400.f, 400.f); // 大击退
+                        // 击退方向：从爆炸中心指向玩家（而非固定右下45°）
+                        sf::Vector2f toPlayer2 = playerPos - myPos;
+                        float dist2 = std::sqrt(toPlayer2.x * toPlayer2.x + toPlayer2.y * toPlayer2.y);
+                        if (dist2 > 0.f) toPlayer2 /= dist2;
+                        dmg.knockback = toPlayer2 * 400.f; // 大击退
                         dmg.lifesteal = 0.f;
                         combat.ApplyDamage(registry, dmg);
                     }
@@ -1107,44 +1087,6 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
                 enemy->castActive -= dt;
             }
         }
-
-        // ---- 处理 CastWarningZone 爆炸 ----
-        if (castWarnings) {
-            for (auto& wz : *castWarnings) {
-                wz.lifetime -= dt;
-                if (wz.lifetime <= 0.f && !wz.exploded) {
-                    wz.exploded = true;
-                    // 查询范围内的实体造成伤害
-                    neighbors.clear();
-                    float queryRadius = wz.radius * 0.8f; // 伤害范围略小于预警范围，给予边缘容错
-                    grid.QueryRange(wz.position, queryRadius, neighbors);
-                    for (EntityId targetId : neighbors) {
-                        if (targetId == playerEntity) {
-                            DamageInfo dmg;
-                            dmg.attacker = id;
-                            dmg.target = targetId;
-                            dmg.amount = wz.damage;
-                            dmg.isCritical = false;
-                            dmg.element = ElementType::Fire; // 火焰元素 AoE
-                            dmg.knockback = sf::Vector2f(0.f, 0.f);
-                            dmg.lifesteal = 0.f;
-                            combat.ApplyDamage(registry, dmg);
-                        }
-                    }
-                    // 爆炸特效
-                    particles.Explosion(wz.position);
-                    AudioManager::Instance().PlaySFX(AudioManager::kSFXExplosion);
-                    LOG_INFO("施法者 AoE 爆炸，位置 (%.0f, %.0f), 伤害=%.0f",
-                             wz.position.x, wz.position.y, wz.damage);
-                }
-            }
-            // 清理已爆炸的预警圈
-            castWarnings->erase(
-                std::remove_if(castWarnings->begin(), castWarnings->end(),
-                    [](const CastWarningZone& z) { return z.exploded; }),
-                castWarnings->end()
-            );
-        }
         if (enemy->attackCooldown > 0.f) return;
 
         // ---- 远程敌人射击 ----
@@ -1227,6 +1169,44 @@ float UpdateEnemyCombat(Registry& registry, UniformGrid& grid,
             }
         }
     });
+
+    // ---- 处理 CastWarningZone 爆炸（在 ForEach 外部，每帧只处理一次）----
+    if (castWarnings) {
+        for (auto& wz : *castWarnings) {
+            wz.lifetime -= dt;
+            if (wz.lifetime <= 0.f && !wz.exploded) {
+                wz.exploded = true;
+                // 查询范围内的实体造成伤害
+                neighbors.clear();
+                float queryRadius = wz.radius * 0.8f; // 伤害范围略小于预警范围，给予边缘容错
+                grid.QueryRange(wz.position, queryRadius, neighbors);
+                for (EntityId targetId : neighbors) {
+                    if (targetId == playerEntity) {
+                        DamageInfo dmg;
+                        dmg.attacker = kInvalidEntity; // Caster 可能已死亡，用无效 ID
+                        dmg.target = targetId;
+                        dmg.amount = wz.damage;
+                        dmg.isCritical = false;
+                        dmg.element = ElementType::Fire; // 火焰元素 AoE
+                        dmg.knockback = sf::Vector2f(0.f, 0.f);
+                        dmg.lifesteal = 0.f;
+                        combat.ApplyDamage(registry, dmg);
+                    }
+                }
+                // 爆炸特效
+                particles.Explosion(wz.position);
+                AudioManager::Instance().PlaySFX(AudioManager::kSFXExplosion);
+                LOG_INFO("施法者 AoE 爆炸，位置 (%.0f, %.0f), 伤害=%.0f",
+                         wz.position.x, wz.position.y, wz.damage);
+            }
+        }
+        // 清理已爆炸的预警圈
+        castWarnings->erase(
+            std::remove_if(castWarnings->begin(), castWarnings->end(),
+                [](const CastWarningZone& z) { return z.exploded; }),
+            castWarnings->end()
+        );
+    }
 
     auto endTime = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);

@@ -456,8 +456,13 @@ bool ProjectileSystem::handleHit(Registry& registry, EntityId bulletId,
     // 施加伤害（直接扣减 HP，CombatSystem 的回调由 Game 层处理）
     Health* targetHealth = registry.GetComponent<Health>(targetId);
     if (targetHealth && targetHealth->current > 0.f) {
-        // 暴击判定（15% 暴击率）
-        bool isCritical = (std::rand() % 100) < 15;
+        // 暴击判定：使用子弹所有者的实际暴击率（玩家子弹用 PlayerComponent，敌人子弹用 EnemyComponent）
+        float critChance = 0.15f; // 默认 15%
+        if (proj.owner != kInvalidEntity) {
+            const PlayerComponent* ownerPc = registry.GetComponent<PlayerComponent>(proj.owner);
+            if (ownerPc) critChance = ownerPc->stats.critChance;
+        }
+        bool isCritical = (std::rand() % 100) < static_cast<int>(critChance * 100.f);
         float damage = proj.damage;
         if (isCritical) {
             damage *= 1.5f;

@@ -5,6 +5,7 @@
 #include "gameplay/PlayerCombat.h"
 #include "gameplay/CombatEffects.h"
 #include "gameplay/SkillSystem.h"
+#include "gameplay/DialogueData.h"
 #include <string>
 #include <cstdlib>
 #include <ctime>
@@ -162,6 +163,11 @@ void Game::initializeUI() {
     });
 
     LOG_INFO("UI 初始化完成");
+
+    // ---- 第三十三轮新增：对话系统初始化 ----
+    dialogueBoxUI_.Initialize(font);
+    registerDialogueCallbacks();
+    LOG_INFO("对话系统初始化完成");
 }
 
 void Game::registerStates() {
@@ -298,6 +304,14 @@ void Game::ChangeState(GameState newState) {
     //                   但不调用 Playing.onEnter（避免 setupPlayingScene() 重建场景）
     bool skipOnExit = (state_ == GameState::Playing && newState == GameState::Paused);
     bool skipOnEnter = (state_ == GameState::Paused && newState == GameState::Playing);
+
+    // 切换状态时清理对话系统（Playing ↔ Paused 除外）
+    if (!skipOnExit && !skipOnEnter && dialogueSystem_.IsActive()) {
+        dialogueSystem_.EndDialogue();
+        dialogueBoxUI_.SetVisible(false);
+        pendingEventRoomIdx_ = -1;
+        pendingMerchantOpen_ = false;
+    }
 
     if (!skipOnExit) {
         if (auto it = states_.find(state_); it != states_.end() && it->second.onExit) {
@@ -520,15 +534,27 @@ void Game::handleEvents() {
                     }
                 }
             } else if (key == sf::Keyboard::E) {
-                // E 键交互：开关门 + 开宝箱
-                // 放在 handleEvents 中确保每次按键只触发一次（避免固定步长多次调用导致抖动）
-                if (state_ == GameState::Playing && dungeonInitialized_) {
+                // 对话系统优先：对话活跃时，E 键推进对话
+                if (dialogueSystem_.IsActive()) {
+                    dialogueSystem_.Advance();
+                } else if (state_ == GameState::Playing && dungeonInitialized_) {
                     handleInteract();
                 }
             } else if (key == sf::Keyboard::Num1 || key == sf::Keyboard::Num2 ||
-                       key == sf::Keyboard::Num3) {
+                       key == sf::Keyboard::Num3 || key == sf::Keyboard::Num4) {
+                // ---- 第三十三轮：对话选项优先（对话活跃时，1-4 选择选项）----
+                if (dialogueSystem_.IsActive() && dialogueSystem_.GetState().showChoices) {
+                    int idx = -1;
+                    if (key == sf::Keyboard::Num1) idx = 0;
+                    else if (key == sf::Keyboard::Num2) idx = 1;
+                    else if (key == sf::Keyboard::Num3) idx = 2;
+                    else if (key == sf::Keyboard::Num4) idx = 3;
+                    if (idx >= 0) {
+                        dialogueSystem_.SelectChoice(idx);
+                    }
+                }
                 // ---- 第十五轮：圣物选择优先（Boss 击败后弹出时）----
-                if (state_ == GameState::Playing && relicChoiceActive_) {
+                else if (state_ == GameState::Playing && relicChoiceActive_) {
                     int idx = relicMenu_.HandleKeyInput(static_cast<int>(key));
                     if (idx >= 0 && idx < static_cast<int>(currentRelicOptions_.size())) {
                         RelicType chosen = currentRelicOptions_[idx];
@@ -669,6 +695,164 @@ void Game::Run() {
             fpsLogTimer_ = 0.0;
         }
     }
+}
+
+// ============================================================================
+// 第三十三轮新增：对话系统回调注册与渲染
+// ============================================================================
+
+void Game::registerDialogueCallbacks() {
+    // 注册对话树
+    dialogueTreeId_Beggar_ = dialogueSystem_.RegisterTree(kBeggarDialogue);
+    dialogueTreeId_MerchantNpc_ = dialogueSystem_.RegisterTree(kMerchantDialogue);
+    dialogueTreeId_Mage_ = dialogueSystem_.RegisterTree(kMageDialogue);
+    dialogueTreeId_Tutorial_ = dialogueSystem_.RegisterTree(kTutorialDialogue);
+
+    // 动作处理器：对话中的 Action 节点执行的具体游戏操作
+    dialogueSystem_.SetActionHandler([this](DialogueAction action, int param) -> bool {
+        PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
+        Transform* pT = registry_.GetComponent<Transform>(playerId_);
+        if (!pc || !pT) return false;
+
+        switch (action) {
+            case DialogueAction::GiveGold:
+                pc->stats.coins += param;
+                LOG_INFO("对话动作: 获得 %d 金币", param);
+                return true;
+            case DialogueAction::TakeGold:
+                if (pc->stats.coins >= param) {
+                    pc->stats.coins -= param;
+                    LOG_INFO("对话动作: 扣除 %d 金币", param);
+                    return true;
+                }
+                LOG_WARN("对话动作: 金币不足 (%d < %d)", pc->stats.coins, param);
+                return false;
+            case DialogueAction::GiveExp:
+                upgradeSystem_.AddExp(param);
+                LOG_INFO("对话动作: 获得 %d 经验", param);
+                return true;
+            case DialogueAction::HealPlayer: {
+                Health* h = registry_.GetComponent<Health>(playerId_);
+                if (h) {
+                    float heal = pc->stats.maxHp * (param / 100.f);
+                    h->current = std::min(h->max, h->current + heal);
+                    LOG_INFO("对话动作: 回复 %d%% HP (%.0f)", param, heal);
+                }
+                return true;
+            }
+            case DialogueAction::GiveItem: {
+                ItemQuality q = static_cast<ItemQuality>(std::clamp(param, 1, 4));
+                lootSystem_.DropItem(pT->position, q, currentLevel_);
+                LOG_INFO("对话动作: 获得品质=%d 装备", static_cast<int>(q));
+                return true;
+            }
+            case DialogueAction::ApplyCurse:
+                if (activeEventRoomIdx_ >= 0) {
+                    applyCurse(activeEventRoomIdx_);
+                } else {
+                    pc->cursed = true;
+                }
+                LOG_INFO("对话动作: 施加诅咒");
+                return true;
+            case DialogueAction::RemoveCurse:
+                removeCurse();
+                LOG_INFO("对话动作: 解除诅咒");
+                return true;
+            case DialogueAction::GrantLevels:
+                for (int i = 0; i < param; ++i) {
+                    upgradeSystem_.AddExp(upgradeSystem_.GetExpToNext());
+                }
+                LOG_INFO("对话动作: 提升 %d 级", param);
+                return true;
+            case DialogueAction::MarkEventDone:
+                // 标记事件完成（参数为事件ID，在事件系统中使用）
+                LOG_INFO("对话动作: 标记事件 %d 已完成", param);
+                return true;
+            case DialogueAction::SacrificeHP: {
+                // 献祭当前 HP 的 param%（法师事件用）
+                Health* h = registry_.GetComponent<Health>(playerId_);
+                if (h) {
+                    float cost = h->current * (param / 100.f);
+                    h->current = std::max(1.f, h->current - cost);
+                    SpawnDamageText(registry_, pT->position, cost, false);
+                    LOG_INFO("对话动作: 献祭 %d%% HP (%.0f)", param, cost);
+                }
+                return true;
+            }
+            case DialogueAction::GiveRandomItem: {
+                // 给予随机品质装备（param=品质上限，0=白 1=蓝 2=黄 3=暗金）
+                int q = (std::rand() % (param + 1)) + 1;
+                ItemQuality quality = static_cast<ItemQuality>(std::clamp(q, 1, 3));
+                lootSystem_.DropItem(pT->position, quality, currentLevel_);
+                LOG_INFO("对话动作: 获得随机品质=%d 装备", static_cast<int>(quality));
+                return true;
+            }
+            case DialogueAction::OpenQuestMenu:
+                questMenuVisible_ = true;
+                questMenu_.SetQuestData(questSystem_);
+                questMenu_.SetVisible(true);
+                LOG_INFO("对话动作: 打开任务栏");
+                return true;
+            default:
+                return false;
+        }
+    });
+
+    // 条件求值器：对话 Branch 节点的条件检查
+    dialogueSystem_.SetConditionEvaluator([this](BranchCondition cond, int param) -> bool {
+        PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
+        if (!pc) return false;
+
+        switch (cond) {
+            case BranchCondition::HasGold:
+                return pc->stats.coins >= param;
+            case BranchCondition::HasItem:
+                // 检查背包中是否有 >= param 品质的物品
+                for (int i = 0; i < InventorySystem::kBackpackSize; ++i) {
+                    auto item = inventorySystem_.GetBackpackItem(i);
+                    if (item.has_value() && static_cast<int>(item->quality) >= param) {
+                        return true;
+                    }
+                }
+                // 也检查已装备
+                for (const auto& slot : inventorySystem_.GetEquippedItems()) {
+                    if (slot.item.has_value() && static_cast<int>(slot.item->quality) >= param) {
+                        return true;
+                    }
+                }
+                return false;
+            case BranchCondition::HasRelic:
+                return relicSystem_.HasRelic(static_cast<RelicType>(param));
+            case BranchCondition::HasSkill:
+                return PlayerHasSkill(*pc, static_cast<SkillType>(param));
+            case BranchCondition::HPBelow: {
+                Health* h = registry_.GetComponent<Health>(playerId_);
+                if (!h || h->max <= 0.f) return false;
+                float hpPct = (h->current / h->max) * 100.f;
+                return hpPct < static_cast<float>(param);
+            }
+            case BranchCondition::IsCursed:
+                return pc->cursed;
+            case BranchCondition::QuestCompleted: {
+                // 检查该 ID 的任务是否处于 Completed 状态
+                for (const auto& qi : questSystem_.GetAllQuests()) {
+                    if (qi.id == param && qi.state == QuestState::Completed) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            case BranchCondition::ComboAbove:
+                return pc->comboCount >= param;
+            default:
+                return false;
+        }
+    });
+}
+
+void Game::renderDialogueBox() {
+    if (!dialogueSystem_.IsActive()) return;
+    dialogueBoxUI_.Render(window_);
 }
 
 } // namespace cu

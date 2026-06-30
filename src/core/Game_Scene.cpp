@@ -92,6 +92,9 @@ void Game::setupPlayingScene(bool preserveProgress) {
     // ---- 狙击远程怪贴图 ----
     ok &= atlas_.AddImageFromMemory("enemy_sniper",
         TextureGenerator::CreateEnemySprite(EnemyType::SniperRanged));
+    // ---- Caster 施法者贴图 ----
+    ok &= atlas_.AddImageFromMemory("enemy_caster",
+        TextureGenerator::CreateEnemySprite(EnemyType::Caster));
     // ---- 商人 NPC 贴图 ----
     ok &= atlas_.AddImageFromMemory("merchant",
         TextureGenerator::CreateMerchantSprite());
@@ -620,6 +623,16 @@ void Game::setupPlayingScene(bool preserveProgress) {
         particles_.Emit(pos, 10, cfg);
     };
 
+    // ---- 首次游戏教程对话 ----
+    // 检查 settings_.IsFirstPlay()，如果为 true 则启动教程对话并标记为 false
+    if (!preserveProgress && settings_.IsFirstPlay() && dialogueTreeId_Tutorial_ >= 0) {
+        dialogueSystem_.StartDialogue(dialogueTreeId_Tutorial_);
+        dialogueBoxUI_.SetVisible(true);
+        settings_.SetFirstPlay(false);
+        settings_.Save();
+        LOG_INFO("首次游戏，显示教程对话");
+    }
+
     LOG_INFO("演示场景已创建: %zu 个实体, 图集 %zu 张图片",
              registry_.GetEntityCount(), atlas_.GetImageCount());
 }
@@ -794,6 +807,12 @@ void Game::resetAllUIFlags() {
     if (merchantMenu_.IsVisible()) merchantMenu_.SetVisible(false);
     if (questMenu_.IsVisible()) questMenu_.SetVisible(false);
     if (achievementMenu_.IsVisible()) achievementMenu_.SetVisible(false);
+    // 对话系统清理
+    dialogueSystem_.EndDialogue();
+    dialogueBoxUI_.SetVisible(false);
+    pendingEventRoomIdx_ = -1;
+    pendingMerchantOpen_ = false;
+    pendingTutorialQuestOpen_ = false;
 }
 
 // ============================================================================

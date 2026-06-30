@@ -1,5 +1,5 @@
-# CrazyUnder 项目状态总结（2026-06-29 第三十二轮）
-> [INDEX] 项目状态、第三十二轮详情、历史轮次索引、已知问题
+# CrazyUnder 项目状态总结（2026-06-29 第三十三轮）
+> [INDEX] 项目状态、第三十三轮详情、历史轮次索引、已知问题
 
 ---
 
@@ -55,11 +55,44 @@
 
 ---
 
-## 历史轮次索引
-> [INDEX] 第三十轮~第十轮
+## 四-w、第三十三轮新增/修复内容（对话系统：NPC 接入 + 文本适配）
+
+### 设计意图
+将已存在的三个 NPC（事件房乞丐/神秘法师、商人）从硬编码 switch-case 改造为对话系统驱动，实现"数据逻辑彻底分离"：对话树定义在 .h 文件中，引擎解释执行。
+
+### 新增对话树数据（`DialogueData.h`）
+1. **流浪乞丐**（8 节点）：开场白 → Branch(金币≥50?) → Choice(施舍/拒绝) → Action(TakeGold 50) → Action(GiveExp 100) → Action(HealPlayer 20%) → End
+2. **神秘法师**（7 节点）：开场白 → Branch(HP≥30%?) → Choice(献祭/拒绝) → Action(SacrificeHP 30%) → Action(GiveRandomItem) → End
+3. **神秘商人**（6 节点）：开场白 → Branch(有贪婪之眼?) → Choice(交易/拒绝) → 对话结束后打开商人菜单
+
+### 核心修改
+| 文件 | 修改内容 |
+|------|---------|
+| `DialogueTypes.h` | 新增 `SacrificeHP`(献祭HP) 和 `GiveRandomItem`(随机装备) 动作 |
+| `Game.h` | 新增 `dialogueTreeId_Mage_`、`pendingEventRoomIdx_`(事件收盘)、`pendingMerchantOpen_`(开后菜单) |
+| `Game.cpp (registerDialogueCallbacks)` | 注册三棵对话树，新增 SacrificeHP/GiveRandomItem 动作处理 |
+| `Game_Interaction.cpp (handleInteract)` | 事件房：Beggar/Mage 走对话树（非对话事件走原逻辑）；商人：走对话树，对话结束再开菜单 |
+| `Game_Update.cpp` | 对话非活跃时检查 `pendingEventRoomIdx_`(标记事件触发/关闭提示) 和 `pendingMerchantOpen_`(刷新并打开商人菜单) |
+
+### 对话流程
+```
+事件房(乞丐/法师)按E → startDialogue → 打字机 → 选择/推进 → Action执行 → dialogueEnd → pending收盘
+商人在范围按E → startDialogue → 选择(交易/拒绝) → 对话结束 → pending→打开商人菜单
+```
+
+### 非对话事件
+- ChestMimic、Altar、Forge 仍使用原有的硬编码 `handleEventInteraction()` 逻辑，未改为对话系统。
+
+### 编译验证
+- Release 版本编译成功（0 错误，1 个 C4244 历史警告）
+- 可执行文件：`build/bin/Release/crazyunder.exe`
+
+---
+> [INDEX] 第三十三轮~第十轮
 
 | 轮次 | 核心内容 |
 |------|---------|
+| 第三十三轮 | 对话系统：DialogueTypes/DialogueData/DialogueSystem/DialogueBoxUI + NPCComponent |
 | 第三十二轮 | Game.cpp 模块化拆分（1→8文件） |
 | 第三十一轮 | 帮助手册、死亡回顾、小地图标记、屏幕震动、阻碍房增强、物品叙事、动态事件、敌人 AI 改善 |
 | 第三十轮 | Renderer 性能优化、ECS View() 零分配优化 |
@@ -96,3 +129,5 @@
 - 平衡性调整：敌人 HP/伤害、玩家升级曲线
 - 音效补充：部分技能/机制音效缺失
 - 技能获取渠道：目前仅升级和商人购买
+- [已解决] NPC 对话：已在事件房（乞丐/法师）和商人中集成对话系统
+- [已解决] 对话数据：乞丐/法师/商人已完成完整对话树

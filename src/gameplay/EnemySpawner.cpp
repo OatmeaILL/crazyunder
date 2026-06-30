@@ -46,6 +46,9 @@ static const EnemyPrototype kPrototypes[] = {
     // SniperRanged: 暗青色，超远距离高伤害狙击（靠近时快速撤退）
     {EnemyType::SniperRanged, 18.f, 70.f, 12.f, 500.f, 2.5f, 550.f,
      sf::Color(60, 180, 160),  1.0f, "enemy_sniper"},
+    // Caster: 深紫色，中距离引导 AoE 法阵，延迟范围爆炸
+    {EnemyType::Caster, 25.f, 60.f, 15.f, 400.f, 3.5f, 500.f,
+     sf::Color(150, 50, 200),  1.2f, "enemy_caster"},
 };
 
 static constexpr int kPrototypeCount = static_cast<int>(sizeof(kPrototypes) / sizeof(kPrototypes[0]));
@@ -96,6 +99,7 @@ void EnemySpawner::Initialize(Registry& registry, const TextureAtlas& atlas,
     // 预创建敌人实体池
     enemyPool_.clear();
     freeList_.clear();
+    inFreeList_.clear();
     enemyPool_.reserve(kPoolCapacity);
     freeList_.reserve(kPoolCapacity);
 
@@ -128,6 +132,9 @@ void EnemySpawner::Initialize(Registry& registry, const TextureAtlas& atlas,
 
         enemyPool_.push_back(id);
         freeList_.push_back(id);
+        // 确保 inFreeList_ 足够大
+        while (inFreeList_.size() <= id) inFreeList_.push_back(false);
+        inFreeList_[id] = true;
     }
 
     LOG_INFO("敌人生成器已初始化: 池容量=%d, 可用=%d",
@@ -141,6 +148,7 @@ EntityId EnemySpawner::acquireFromPool() {
     }
     EntityId id = freeList_.back();
     freeList_.pop_back();
+    if (id < inFreeList_.size()) inFreeList_[id] = false;
     ++aliveCount_;
     return id;
 }
@@ -161,6 +169,7 @@ void EnemySpawner::releaseToPool(EntityId id) {
         velocity->linear = sf::Vector2f(0.f, 0.f);
     }
     freeList_.push_back(id);
+    if (id < inFreeList_.size()) inFreeList_[id] = true;
     --aliveCount_;
 }
 
@@ -488,20 +497,14 @@ void EnemySpawner::recycleDeadEnemies() {
     // 回收 active=false 的敌人（由 Game.cpp 死亡检测设置）
     // 不使用 IsAlive 检查，因为实体未被销毁，仅标记为非活跃
     for (EntityId id : enemyPool_) {
-        // 先检查是否已在 freeList 中
-        bool alreadyFree = false;
-        for (EntityId freeId : freeList_) {
-            if (freeId == id) {
-                alreadyFree = true;
-                break;
-            }
-        }
-        if (alreadyFree) continue;
+        // O(1) 检查是否已在 freeList 中
+        if (id < inFreeList_.size() && inFreeList_[id]) continue;
 
         // 检查敌人是否非活跃（已死亡）
         EnemyComponent* enemy = registry_->GetComponent<EnemyComponent>(id);
         if (enemy && !enemy->active) {
             freeList_.push_back(id);
+            if (id < inFreeList_.size()) inFreeList_[id] = true;
             --aliveCount_;
         }
     }

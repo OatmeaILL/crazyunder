@@ -64,15 +64,14 @@ void TileMap::Render(Renderer& renderer, const Camera& camera) const {
     }
 
     // 提交到 Renderer（作为 Background 层，绕过命令队列直接绘制）
-    // 将 vector<Vertex> 转换为 VertexArray 供 DrawRaw 使用
+    // 直接使用 visibleVertices_ 数据，避免每帧复制到 VertexArray
     if (!visibleVertices_.empty()) {
-        visibleVertexArray_.clear();
-        visibleVertexArray_.resize(visibleVertices_.size());
-        for (std::size_t i = 0; i < visibleVertices_.size(); ++i) {
-            visibleVertexArray_[i] = visibleVertices_[i];
-        }
         const sf::Texture* tex = atlas_->GetTexture();
-        renderer.DrawRaw(tex, visibleVertexArray_, Layer::Background);
+        sf::RenderStates states;
+        states.texture = tex;
+        renderer.GetTarget()->draw(visibleVertices_.data(), visibleVertices_.size(), sf::Quads, states);
+        renderer.IncrementDrawCallCount();
+        renderer.IncrementVertexCount(static_cast<int>(visibleVertices_.size()));
     }
 }
 

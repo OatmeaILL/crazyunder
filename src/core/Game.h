@@ -64,12 +64,14 @@
 #include "gameplay/RelicSystem.h"
 #include "gameplay/FloorModifier.h"
 #include "gameplay/SoulMemorySystem.h"
+#include "gameplay/DialogueSystem.h"
 #include "ui/QuestMenu.h"
 #include "ui/AchievementMenu.h"
 #include "ui/SoulWellMenu.h"
 #include "ui/UIManager.h"
 #include "ui/HUD.h"
 #include "ui/Menus.h"
+#include "ui/DialogueBoxUI.h"
 #include "utils/UniformGrid.h"
 
 namespace cu {
@@ -340,6 +342,22 @@ private:
     void renderEventHint();              // 渲染事件房交互提示
     void renderEventDialog();            // 渲染事件对话框
     void executeEventChoice(bool accept);// 执行事件选择（accept=true 接受/确认）
+
+    // ---- 第三十三轮新增：对话系统 ----
+    DialogueSystem dialogueSystem_;          // 对话引擎
+    DialogueBoxUI dialogueBoxUI_;            // 对话面板 UI
+    // 对话系统注册的树 ID
+    int dialogueTreeId_Beggar_ = -1;        // 乞丐对话树 ID
+    int dialogueTreeId_Mage_ = -1;          // 神秘法师对话树 ID
+    int dialogueTreeId_MerchantNpc_ = -1;   // 商人对话树 ID
+    int dialogueTreeId_Tutorial_ = -1;      // 教程对话树 ID
+    // 对话结束后待处理的操作
+    int pendingEventRoomIdx_ = -1;          // 对话结束后要标记触发的事件房索引
+    bool pendingMerchantOpen_ = false;      // 对话结束后要打开商人菜单
+    bool pendingTutorialQuestOpen_ = false; // 对话结束后要打开任务栏
+    // 对话系统回调注册
+    void registerDialogueCallbacks();        // 注册动作处理器与条件求值器
+    void renderDialogueBox();               // 渲染对话面板
 
     // ---- 地裂区域更新与渲染 ----
     void updateFissureZones(float dt);   // 更新地裂区域（计时、伤害玩家）

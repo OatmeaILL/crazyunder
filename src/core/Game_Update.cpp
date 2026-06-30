@@ -34,6 +34,48 @@ void Game::updatePlaying(float dt) {
         return;
     }
 
+    // ---- 第三十三轮新增：对话活跃时暂停玩法更新 ----
+    if (dialogueSystem_.IsActive()) {
+        dialogueSystem_.Update(dt);
+        dialogueBoxUI_.SetContent(dialogueSystem_.GetState());
+        dialogueBoxUI_.Update(dt);
+        return;
+    }
+
+    // ---- 第三十三轮：对话结束后的收盘处理 ----
+    if (pendingEventRoomIdx_ >= 0) {
+        // 标记事件房已触发
+        if (pendingEventRoomIdx_ < static_cast<int>(dungeon_.rooms.size())) {
+            dungeon_.rooms[pendingEventRoomIdx_].eventTriggered = true;
+        }
+        // 关闭事件房提示
+        PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
+        if (pc) {
+            pc->eventPromptActive = false;
+        }
+        activeEventRoomIdx_ = -1;
+        activeEventType_ = EventType::None;
+        pendingEventRoomIdx_ = -1;
+        LOG_INFO("事件房对话结束，事件已标记");
+    }
+    if (pendingMerchantOpen_) {
+        pendingMerchantOpen_ = false;
+        // 只有玩家选择了"交易"选项（目标节点=2）才打开商人菜单
+        // 选择"拒绝"（目标节点=3）则不打开
+        int choiceNode = dialogueSystem_.GetLastChoiceNextNodeId();
+        if (choiceNode == 2 && !merchantMenuVisible_) {
+            merchantMenuVisible_ = true;
+            relicPanelVisible_ = false;
+            PlayerComponent* pc2 = registry_.GetComponent<PlayerComponent>(playerId_);
+            int playerCoins = pc2 ? pc2->stats.coins : 0;
+            merchantMenu_.SetMerchantStock(merchantSystem_);
+            merchantMenu_.SetBackpack(inventorySystem_, playerCoins, pc2);
+            merchantMenu_.SetVisible(true);
+            AudioManager::Instance().PlaySFX(AudioManager::kSFXMerchant);
+            LOG_INFO("商人对话结束，打开交易菜单（玩家金币=%d）", playerCoins);
+        }
+    }
+
     // Phase 8: 背包菜单打开时暂停玩法更新
     if (inventoryMenuVisible_) {
         inventoryMenu_.Update(dt);

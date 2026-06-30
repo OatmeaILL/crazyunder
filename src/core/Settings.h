@@ -36,6 +36,7 @@ public:
         sfxVolume_ = 70.f;
         width_ = 1280;
         height_ = 720;
+        firstPlay_ = true;
 
         const std::string path = getFilePath();
         std::ifstream ifs(path);
@@ -70,6 +71,8 @@ public:
             } else if (key == "height") {
                 int h = std::stoi(val);
                 if (h >= 480 && h <= 4320) height_ = h;
+            } else if (key == "first_play") {
+                firstPlay_ = (val == "true" || val == "1");
             }
         }
     }
@@ -86,6 +89,7 @@ public:
         ofs << "sfx_volume=" << sfxVolume_ << "\n";
         ofs << "width=" << width_ << "\n";
         ofs << "height=" << height_ << "\n";
+        ofs << "first_play=" << (firstPlay_ ? "true" : "false") << "\n";
         return true;
     }
 
@@ -100,11 +104,16 @@ public:
     [[nodiscard]] int GetHeight() const noexcept { return height_; }
     void SetResolution(int w, int h) { width_ = w; height_ = h; }
 
+    // ---- 首次游戏标记 ----
+    [[nodiscard]] bool IsFirstPlay() const noexcept { return firstPlay_; }
+    void SetFirstPlay(bool v) noexcept { firstPlay_ = v; }
+
 private:
     float bgmVolume_ = 50.f;  // BGM 音量 0-100
     float sfxVolume_ = 70.f;  // 音效音量 0-100
     int width_ = 1280;        // 窗口宽度
     int height_ = 720;        // 窗口高度
+    bool firstPlay_ = true;   // 是否首次游戏（true=首次，显示教程）
 
     // 获取配置文件路径（可执行文件同目录下的 settings.ini）
     static std::string getFilePath() {

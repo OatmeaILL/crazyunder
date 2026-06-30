@@ -828,6 +828,55 @@ sf::Image TextureGenerator::CreateEnemySprite(EnemyType type) {
             img.setPixel(16, 15, sf::Color(255, 60, 60));
             return img;
         }
+
+        case EnemyType::Caster: {
+            // 32x32 深紫色施法者（带魔法法阵标记）
+            const int size = 32;
+            sf::Image img;
+            img.create(size, size, sf::Color(0, 0, 0, 0));
+
+            sf::Color bodyColor(150, 50, 200);
+            sf::Color magicColor(200, 100, 255);
+            sf::Color outlineColor = sf::Color::Black;
+            float cx = size / 2.f, cy = size / 2.f;
+            float radius = 10.f;
+
+            // 主体圆形
+            for (int y = 0; y < size; ++y) {
+                for (int x = 0; x < size; ++x) {
+                    float dx = x - cx + 0.5f;
+                    float dy = y - cy + 0.5f;
+                    float dist = std::sqrt(dx * dx + dy * dy);
+                    if (dist <= radius) {
+                        if (dist > radius - 2.f) {
+                            img.setPixel(x, y, outlineColor);
+                        } else {
+                            img.setPixel(x, y, bodyColor);
+                        }
+                    }
+                }
+            }
+
+            // 法阵标记：身体中心画一个五角星（简化为十字 + 圆环）
+            img.setPixel(15, 13, magicColor);
+            img.setPixel(16, 13, magicColor);
+            img.setPixel(17, 13, magicColor);
+            img.setPixel(15, 14, magicColor);
+            img.setPixel(17, 14, magicColor);
+            img.setPixel(15, 15, magicColor);
+            img.setPixel(16, 15, magicColor);
+            img.setPixel(17, 15, magicColor);
+            img.setPixel(15, 16, magicColor);
+            img.setPixel(17, 16, magicColor);
+            img.setPixel(15, 17, magicColor);
+            img.setPixel(16, 17, magicColor);
+            img.setPixel(17, 17, magicColor);
+
+            // 眼睛（亮紫色，施法者特征）
+            img.setPixel(12, 14, sf::Color(220, 180, 255));
+            img.setPixel(19, 14, sf::Color(220, 180, 255));
+            return img;
+        }
     }
     // 回退：返回空图
     return sf::Image();

@@ -166,7 +166,7 @@ void UpdatePlayer(Registry& registry, EntityId playerId,
     PlayerComponent* player = registry.GetComponent<PlayerComponent>(playerId);
     Sprite* sprite = registry.GetComponent<Sprite>(playerId);
 
-    if (!transform || !player) return;
+    if (!transform || !player || !velocity) return;
 
     // ---- 1. 读取移动输入 ----
     sf::Vector2f move(0.f, 0.f);

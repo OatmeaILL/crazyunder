@@ -529,8 +529,8 @@ void DungeonGenerator::assignRoomTypes(Dungeon& dungeon) {
     }
 
     // 事件房：1 个随机房间（4 种事件类型随机选 1）
-    // totalRooms >= 4 时 50% 概率生成
-    if (totalRooms >= 4 && randomChance(0.5f)) {
+    // totalRooms >= 4 时 70% 概率生成
+    if (totalRooms >= 4 && randomChance(0.7f)) {
         for (int attempt = 0; attempt < 10; ++attempt) {
             int idx = randomInt(1, totalRooms - 1);
             if (idx == bossIdx) continue;

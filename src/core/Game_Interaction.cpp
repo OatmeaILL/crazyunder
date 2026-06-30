@@ -200,6 +200,21 @@ void Game::handleUIInput() {
         return; // 存档菜单打开时不处理其他 UI 输入
     }
 
+    // ---- 第三十三轮新增：对话系统鼠标交互（Playing 状态，对话活跃时）----
+    if (state_ == GameState::Playing && dialogueSystem_.IsActive()) {
+        dialogueBoxUI_.UpdateHover(mousePos);
+        if (mousePressed) {
+            int choiceIdx = dialogueBoxUI_.HandleClick(mousePos);
+            if (choiceIdx >= 0) {
+                dialogueSystem_.SelectChoice(choiceIdx);
+            } else {
+                // 点击非选项区域 → 推进对话（同 E 键）
+                dialogueSystem_.Advance();
+            }
+        }
+        return; // 对话活跃时屏蔽其他 UI 输入
+    }
+
     // ---- 商人菜单鼠标点击处理（Playing 状态）----
     if (state_ == GameState::Playing && merchantMenuVisible_) {
         // 每帧更新悬停状态（用于技能 tooltip）
@@ -300,9 +315,9 @@ void Game::handleUIInput() {
                             int slotIdx = static_cast<int>(backpackItem->slot);
                             bool slotOccupied = equipped[slotIdx].item.has_value();
                             inventorySystem_.RemoveFromBackpack(targetIdx);
-                            Item oldItem = inventorySystem_.Equip(*backpackItem);
-                            if (slotOccupied) {
-                                inventorySystem_.ReplaceBackpackItem(targetIdx, oldItem);
+                            auto oldItem = inventorySystem_.Equip(*backpackItem);
+                            if (slotOccupied && oldItem.has_value()) {
+                                inventorySystem_.ReplaceBackpackItem(targetIdx, *oldItem);
                             }
                             AudioManager::Instance().PlaySFX(AudioManager::kSFXEquip);
                             LOG_INFO("装备背包格 %d 的 %s", targetIdx, backpackItem->name.c_str());
@@ -407,9 +422,9 @@ void Game::handleUIInput() {
                     int slotIdx = static_cast<int>(backpackItem->slot);
                     bool slotOccupied = equipped[slotIdx].item.has_value();
                     inventorySystem_.RemoveFromBackpack(index);
-                    Item oldItem = inventorySystem_.Equip(*backpackItem);
-                    if (slotOccupied) {
-                        inventorySystem_.ReplaceBackpackItem(index, oldItem);
+                    auto oldItem = inventorySystem_.Equip(*backpackItem);
+                    if (slotOccupied && oldItem.has_value()) {
+                        inventorySystem_.ReplaceBackpackItem(index, *oldItem);
                     }
                     AudioManager::Instance().PlaySFX(AudioManager::kSFXEquip);
                     LOG_INFO("装备背包格 %d 的 %s", index, backpackItem->name.c_str());
@@ -627,37 +642,67 @@ void Game::handleInteract() {
     Transform* pT = registry_.GetComponent<Transform>(playerId_);
     if (!pT) return;
 
-    // ---- 事件房交互优先级最高 ----
-    // 玩家在事件房内且事件未触发时，按 E 触发事件
+    // ---- 第三十三轮新增：NPC 对话交互（优先于事件房）----
+    // 遍历所有 NPC 实体，检查玩家是否在交互范围内
+    if (!dialogueSystem_.IsActive()) {
+        registry_.ForEach<Transform, NPCComponent>([&](EntityId id) {
+            Transform* npcT = registry_.GetComponent<Transform>(id);
+            NPCComponent* npc = registry_.GetComponent<NPCComponent>(id);
+            if (!npcT || !npc) return;
+            if (npc->dialogueTreeId < 0) return;
+
+            float dx = npcT->position.x - pT->position.x;
+            float dy = npcT->position.y - pT->position.y;
+            float dist = std::sqrt(dx * dx + dy * dy);
+            const float kInteractRange = 64.f; // 64px 交互范围
+
+            if (dist < kInteractRange) {
+                dialogueSystem_.StartDialogue(npc->dialogueTreeId);
+                dialogueBoxUI_.SetVisible(true);
+                LOG_INFO("与 NPC 对话: treeId=%d", npc->dialogueTreeId);
+            }
+        });
+        // 如果在对话中，跳过后续交互
+        if (dialogueSystem_.IsActive()) return;
+    }
+
+    // ---- 事件房交互（改为对话系统驱动）----
+    // 玩家在事件房内且事件未触发时，按 E 启动对话
     if (activeEventRoomIdx_ >= 0 && activeEventType_ != EventType::None) {
-        // 检查玩家是否仍在事件房内
         int curRoom = roomSystem_.GetCurrentRoomIndex();
-        if (curRoom == activeEventRoomIdx_) {
+        if (curRoom == activeEventRoomIdx_ && !dialogueSystem_.IsActive()) {
+            // 根据事件类型选择对话树
+            int treeId = -1;
+            switch (activeEventType_) {
+                case EventType::Beggar: treeId = dialogueTreeId_Beggar_; break;
+                case EventType::Mage:   treeId = dialogueTreeId_Mage_;   break;
+                default: break;
+            }
+            if (treeId >= 0) {
+                dialogueSystem_.StartDialogue(treeId);
+                dialogueBoxUI_.SetVisible(true);
+                // 对话结束后标记事件已触发
+                pendingEventRoomIdx_ = activeEventRoomIdx_;
+                LOG_INFO("事件房对话启动: type=%d treeId=%d",
+                         static_cast<int>(activeEventType_), treeId);
+                return;
+            }
+            // 非对话事件（ChestMimic/Altar/Forge 仍走原有逻辑）
             handleEventInteraction();
-            return; // 事件交互优先，不处理门/宝箱/楼梯
+            return;
         }
     }
 
-    // ---- 商人交互：靠近商人按 E 打开交易菜单 ----
+    // ---- 商人交互（第三十三轮：改为对话系统驱动）----
     if (merchantSystem_.IsActive() && merchantSystem_.IsPlayerInRange(pT->position)) {
-        if (!merchantMenuVisible_) {
-            merchantMenuVisible_ = true;
-            relicPanelVisible_ = false; // 商人菜单打开时关闭圣物面板
-            // 刷新商人菜单数据
-            PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
-            int playerCoins = pc ? pc->stats.coins : 0;
-            merchantMenu_.SetMerchantStock(merchantSystem_);
-            merchantMenu_.SetBackpack(inventorySystem_, playerCoins, pc);
-            merchantMenu_.SetVisible(true);
-            AudioManager::Instance().PlaySFX(AudioManager::kSFXMerchant);
-            LOG_INFO("商人菜单已打开（玩家金币=%d）", playerCoins);
-        } else {
-            // 再次按 E 关闭菜单
-            merchantMenuVisible_ = false;
-            merchantMenu_.SetVisible(false);
-            LOG_INFO("商人菜单已关闭");
+        if (!dialogueSystem_.IsActive() && !merchantMenuVisible_) {
+            // 启动商人对话
+            dialogueSystem_.StartDialogue(dialogueTreeId_MerchantNpc_);
+            dialogueBoxUI_.SetVisible(true);
+            pendingMerchantOpen_ = true; // 对话结束后打开商人菜单
+            LOG_INFO("商人对话启动");
         }
-        return; // 商人交互优先，不处理门/宝箱/楼梯
+        return;
     }
 
     sf::Vector2i playerTile = dungeon_.WorldToTile(pT->position);

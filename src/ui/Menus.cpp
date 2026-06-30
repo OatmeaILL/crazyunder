@@ -1536,7 +1536,8 @@ void InventoryMenu::Render(sf::RenderTarget& target) const {
         sec.setStyle(sf::Text::Bold);
         sec.setOutlineColor(sf::Color::Black);
         sec.setOutlineThickness(2.f);
-        sec.setPosition(40.f, 100.f);
+        sf::FloatRect secBounds = sec.getLocalBounds();
+        sec.setPosition((520.f - secBounds.width) * 0.5f, 100.f);
         target.draw(sec);
     }
 
@@ -1549,7 +1550,7 @@ void InventoryMenu::Render(sf::RenderTarget& target) const {
     }
 
     // ---- 右侧标题：装备背包 ----
-    {
+    {   
         sf::Text sec;
         sec.setFont(*font_);
         sec.setString(U8("装备背包"));
@@ -1558,7 +1559,8 @@ void InventoryMenu::Render(sf::RenderTarget& target) const {
         sec.setStyle(sf::Text::Bold);
         sec.setOutlineColor(sf::Color::Black);
         sec.setOutlineThickness(2.f);
-        sec.setPosition(560.f, 100.f);
+        sf::FloatRect secBounds = sec.getLocalBounds();
+        sec.setPosition(460.f + (1280.f - 560.f - secBounds.width) * 0.5f, 100.f);
         target.draw(sec);
     }
 
@@ -1759,7 +1761,8 @@ void InventoryMenu::Render(sf::RenderTarget& target) const {
         sec.setStyle(sf::Text::Bold);
         sec.setOutlineColor(sf::Color::Black);
         sec.setOutlineThickness(2.f);
-        sec.setPosition(40.f, 525.f);
+        sf::FloatRect secBounds = sec.getLocalBounds();
+        sec.setPosition((520.f - secBounds.width) * 0.5f, 500.f);
         target.draw(sec);
     }
 
@@ -1773,7 +1776,8 @@ void InventoryMenu::Render(sf::RenderTarget& target) const {
         sec.setStyle(sf::Text::Bold);
         sec.setOutlineColor(sf::Color::Black);
         sec.setOutlineThickness(2.f);
-        sec.setPosition(560.f, 525.f);
+        sf::FloatRect secBounds2 = sec.getLocalBounds();
+        sec.setPosition(460.f + (1280.f - 560.f - secBounds2.width) * 0.5f, 525.f);
         target.draw(sec);
     }
 
@@ -1921,7 +1925,8 @@ void InventoryMenu::Render(sf::RenderTarget& target) const {
         totalTitle.setCharacterSize(18);
         totalTitle.setFillColor(sf::Color(255, 220, 100));
         totalTitle.setStyle(sf::Text::Bold);
-        totalTitle.setPosition(40.f, 660.f);
+        sf::FloatRect totalTitleBounds = totalTitle.getLocalBounds();
+        totalTitle.setPosition((520.f - totalTitleBounds.width) * 0.5f, 660.f);
         target.draw(totalTitle);
 
         std::string totalStr;
@@ -1958,7 +1963,7 @@ void InventoryMenu::Render(sf::RenderTarget& target) const {
                 if (pieces < 2) continue;
                 auto [bt2, bv2] = LootSystem::GetSetBonus(sid, 2);
                 if (bt2 != SetBonusType::None) {
-                    totalStr += U8("套装:") + LootSystem::GetSetName(sid) +
+                    totalStr += std::string("套装:") + LootSystem::GetSetName(sid) +
                                 " 2件:" + formatSetBonusShort(bt2, bv2);
                 }
                 if (pieces >= 3) {
@@ -1975,7 +1980,8 @@ void InventoryMenu::Render(sf::RenderTarget& target) const {
         totalText.setString(utf8ToSfString(totalStr));
         totalText.setCharacterSize(14);
         totalText.setFillColor(sf::Color(200, 230, 200));
-        totalText.setPosition(120.f, 690.f);
+        sf::FloatRect totalTextBounds = totalText.getLocalBounds();
+        totalText.setPosition((520.f - totalTextBounds.width) * 0.5f, 690.f);
         target.draw(totalText);
     }
 
@@ -2180,7 +2186,7 @@ void MerchantMenu::Render(sf::RenderTarget& target) const {
     // ---- 顶部标题 "神秘商人" ----
     sf::Text title;
     title.setFont(*font_);
-    title.setString(U8("神秘商人（左键购买/出售 | G/ESC 关闭）"));
+    title.setString(U8("神秘商人"));
     title.setCharacterSize(36);
     title.setFillColor(sf::Color(255, 220, 100));
     title.setStyle(sf::Text::Bold);
@@ -2213,7 +2219,8 @@ void MerchantMenu::Render(sf::RenderTarget& target) const {
         sec.setStyle(sf::Text::Bold);
         sec.setOutlineColor(sf::Color::Black);
         sec.setOutlineThickness(2.f);
-        sec.setPosition(40.f, 100.f);
+        sf::FloatRect secBounds = sec.getLocalBounds();
+        sec.setPosition((625.f - secBounds.width) * 0.5f, 90.f);
         target.draw(sec);
     }
 
@@ -2235,7 +2242,8 @@ void MerchantMenu::Render(sf::RenderTarget& target) const {
         sec.setStyle(sf::Text::Bold);
         sec.setOutlineColor(sf::Color::Black);
         sec.setOutlineThickness(2.f);
-        sec.setPosition(660.f, 100.f);
+        sf::FloatRect secBounds = sec.getLocalBounds();
+        sec.setPosition(645.f + (1280.f - 660.f - secBounds.width) * 0.5f, 90.f);
         target.draw(sec);
     }
 
@@ -2328,7 +2336,8 @@ void MerchantMenu::Render(sf::RenderTarget& target) const {
         skillSec.setStyle(sf::Text::Bold);
         skillSec.setOutlineColor(sf::Color::Black);
         skillSec.setOutlineThickness(2.f);
-        skillSec.setPosition(40.f, 640.f);
+        sf::FloatRect skillSecBounds = skillSec.getLocalBounds();
+        skillSec.setPosition((620.f - skillSecBounds.width) * 0.5f, 640.f);
         target.draw(skillSec);
     }
 
@@ -2474,7 +2483,8 @@ void MerchantMenu::Render(sf::RenderTarget& target) const {
         skillBpSec.setStyle(sf::Text::Bold);
         skillBpSec.setOutlineColor(sf::Color::Black);
         skillBpSec.setOutlineThickness(2.f);
-        skillBpSec.setPosition(660.f, 610.f);
+        sf::FloatRect skillBpSecBounds = skillBpSec.getLocalBounds();
+        skillBpSec.setPosition(660.f + (1280.f - 660.f - skillBpSecBounds.width) * 0.5f, 610.f);
         target.draw(skillBpSec);
     }
 

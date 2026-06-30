@@ -178,6 +178,8 @@ private:
     std::vector<EntityId> enemyPool_;
     // 空闲 EntityId 栈（可复用）
     std::vector<EntityId> freeList_;
+    // 标记 Entity 是否在 freeList 中（O(1) 查询，替代 O(n) 线性扫描）
+    std::vector<bool> inFreeList_;
 
     // 生成队列：待生成的敌人类型列表
     std::vector<EnemyType> spawnQueue_;

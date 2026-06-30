@@ -70,7 +70,7 @@ public:
     // 装备物品到对应槽位
     // 若槽位已有装备，旧装备被替换并返回
     // 返回被替换的旧装备（nullopt 表示槽位原本为空）
-    Item Equip(const Item& newItem);
+    std::optional<Item> Equip(const Item& newItem);
 
     // 卸下指定槽位的装备
     // 返回被卸下的装备（nullopt 表示槽位为空）

@@ -78,6 +78,11 @@ public:
     // 重置统计（每帧 BeginScene 自动调用）
     void ResetStats() noexcept;
 
+    // 直接访问渲染目标（供 TileMap 等绕过命令队列直接绘制）
+    [[nodiscard]] sf::RenderTarget* GetTarget() noexcept { return target_; }
+    void IncrementDrawCallCount() noexcept { ++drawCallCount_; }
+    void IncrementVertexCount(int count) noexcept { vertexCount_ += count; }
+
 private:
     // 绘制命令（入队后排序、批量绘制）
     struct DrawCommand {

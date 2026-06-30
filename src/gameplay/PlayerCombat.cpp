@@ -207,7 +207,7 @@ void UpdatePlayerCombat(Registry& registry, const Input& input,
     if (input.IsMouseDown(sf::Mouse::Right)) {
         if (!playerComp->dodgeButtonHeld && playerComp->dodgeCooldown <= 0.f) {
             playerComp->dodgeButtonHeld = true;
-            playerComp->dodgeCooldown = kDodgeCooldown - playerComp->stats.dodgeCooldownReduce;
+            playerComp->dodgeCooldown = std::max(0.f, kDodgeCooldown - playerComp->stats.dodgeCooldownReduce);
             playerComp->dodgeInvincibility = kDodgeInvincibility;
             playerComp->dodgeDashTimer = kDodgeDashDuration;
 

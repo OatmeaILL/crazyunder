@@ -211,8 +211,7 @@ std::array<UpgradeOption, 3> UpgradeSystem::RollUpgrades() {
         return result;
     }
 
-    // 随机打乱
-    std::srand(static_cast<unsigned>(std::rand()));
+    // 随机打乱（Fisher-Yates）
     for (int i = static_cast<int>(available.size()) - 1; i > 0; --i) {
         int j = std::rand() % (i + 1);
         std::swap(available[i], available[j]);

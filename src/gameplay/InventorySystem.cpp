@@ -62,14 +62,13 @@ void InventorySystem::LoadFromData(const std::array<EquipmentSlot, 6>& equipped,
 // 注意：返回值是旧装备。若槽位为空，返回的 Item.quality 为 White 且 affixes 为空
 // 调用者可通过 old.affixes.empty() 判断是否为空
 // ============================================================================
-Item InventorySystem::Equip(const Item& newItem) {
+std::optional<Item> InventorySystem::Equip(const Item& newItem) {
     int idx = static_cast<int>(newItem.slot);
-    Item oldItem;
-    bool hadOld = false;
+    if (idx < 0 || idx >= 6) return std::nullopt; // 防御性边界检查
 
-    if (idx >= 0 && idx < 6 && slots_[idx].item.has_value()) {
+    std::optional<Item> oldItem;
+    if (slots_[idx].item.has_value()) {
         oldItem = slots_[idx].item.value();
-        hadOld = true;
     }
 
     slots_[idx].item = newItem;
@@ -77,7 +76,7 @@ Item InventorySystem::Equip(const Item& newItem) {
     LOG_INFO("装备 %s 到槽位 %s%s",
              newItem.name.c_str(),
              LootSystem::GetSlotName(newItem.slot),
-             hadOld ? ("（替换旧装备: " + oldItem.name + "）").c_str() : "");
+             oldItem.has_value() ? ("（替换旧装备: " + oldItem->name + "）").c_str() : "");
 
     return oldItem;
 }

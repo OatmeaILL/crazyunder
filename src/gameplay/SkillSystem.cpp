@@ -564,10 +564,24 @@ void UpdateSkillBuffs(Registry& registry, EntityId player,
                 // 被引力井影响的敌人不仅被拉近，还附带 2s 冰冻减速，
                 // 即使脱离引力井范围仍会减速，强化"控制场"定位，
                 // 与地刺 Poison 流派形成"冰火毒"三元素策略维度。
-                // CreateElementalStatus(Ice, 0) → 持续 2s，无伤害，由 EnemyAI 应用 50% 减速
-                StatusEffect iceEff = CombatSystem::CreateElementalStatus(ElementType::Ice, 0.f);
-                if (iceEff.duration > 0.f) {
-                    combat.ApplyStatus(registry, tid, iceEff);
+                // 优化：仅当敌人没有 Ice 状态时才施加，避免每帧重复调用 ApplyStatus
+                {
+                    const StatusEffectComponent* seComp = registry.GetComponent<StatusEffectComponent>(tid);
+                    bool hasIce = false;
+                    if (seComp) {
+                        for (const auto& eff : seComp->effects) {
+                            if (eff.type == ElementType::Ice && eff.remaining > 0.f) {
+                                hasIce = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!hasIce) {
+                        StatusEffect iceEff = CombatSystem::CreateElementalStatus(ElementType::Ice, 0.f);
+                        if (iceEff.duration > 0.f) {
+                            combat.ApplyStatus(registry, tid, iceEff);
+                        }
+                    }
                 }
             }
 
@@ -665,7 +679,7 @@ void UpdateSkillBuffs(Registry& registry, EntityId player,
             // 每 0.5s 造成一次伤害（使用 PlayerComponent 成员计时器，避免 static 跨局残留）
             pc->spikeTickTimer += dt;
             if (pc->spikeTickTimer >= 0.5f) {
-                pc->spikeTickTimer = 0.f;
+                pc->spikeTickTimer -= 0.5f; // 取模而非重置，避免大 dt 时丢失 tick
 
                 std::vector<EntityId> targets;
                 grid.QueryRange(pc->spikeGroundPos, kSpikeRadius, targets);
