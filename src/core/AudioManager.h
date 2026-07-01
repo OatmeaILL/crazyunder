@@ -101,7 +101,10 @@ public:
     static constexpr const char* kSFXVictory           = "victory";           // 过关胜利
     static constexpr const char* kSFXQuestTip          = "questtip";          // 任务可完成提示
     static constexpr const char* kSFXQuestReward       = "questreward";       // 任务领取奖励
-    static constexpr const char* kSFXPlayerDeath       = "playerdeath";       // 玩家死亡
+    static constexpr const char* kSFXPlayerDeath       = "playerdeath"; // 玩家死亡
+
+    // 剑士专属音效
+    static constexpr const char* kSFXSwordSweep = "swordsweep"; // 剑士挥砍
 
     static constexpr const char* kBGMMenu    = "menu";
     static constexpr const char* kBGMDungeon = "dungeon";

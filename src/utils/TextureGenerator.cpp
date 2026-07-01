@@ -1975,6 +1975,86 @@ sf::Texture TextureGenerator::CreateCardBorder(sf::Color color) {
 }
 
 // ============================================================================
+// CreateSwordSprite —— 生成 32x32 长剑贴图
+// ----------------------------------------------------------------------------
+// 用于剑士职业的攻击视觉表现：
+//   - 银白色剑身（从左下到右上的对角线，带高光）
+//   - 金色十字护手
+//   - 棕色剑柄 + 圆形剑首
+// 透明背景，仅剑体部分有像素
+// ============================================================================
+sf::Image TextureGenerator::CreateSwordSprite() {
+    const int size = 32;
+    sf::Image img;
+    img.create(size, size, sf::Color(0, 0, 0, 0));
+
+    auto fillRect = [&img, size](int x, int y, int w, int h, sf::Color c) {
+        for (int dy = 0; dy < h; ++dy) {
+            for (int dx = 0; dx < w; ++dx) {
+                int px = x + dx, py = y + dy;
+                if (px >= 0 && px < size && py >= 0 && py < size) {
+                    img.setPixel(px, py, c);
+                }
+            }
+        }
+    };
+
+    auto setPixel = [&img, size](int x, int y, sf::Color c) {
+        if (x >= 0 && x < size && y >= 0 && y < size) {
+            img.setPixel(x, y, c);
+        }
+    };
+
+    sf::Color bladeLight(235, 235, 250);
+    sf::Color bladeMid(190, 190, 215);
+    sf::Color bladeDark(115, 115, 140);
+    sf::Color guardGold(220, 180, 60);
+    sf::Color guardDark(150, 115, 25);
+    sf::Color hiltBrown(120, 75, 35);
+    sf::Color pommelGold(205, 165, 55);
+    sf::Color outline(45, 45, 55);
+
+    // 水平长剑：剑把在左侧，剑尖朝右。
+    // 这样渲染时只需把原点设在剑把处，并用攻击角度直接旋转。
+
+    // 剑身轮廓与主体（从 x=10 延伸到 x=28）
+    fillRect(10, 13, 18, 7, outline);
+    fillRect(11, 14, 17, 5, bladeMid);
+    fillRect(12, 14, 16, 2, bladeLight);
+    fillRect(12, 18, 15, 1, bladeDark);
+
+    // 剑尖（三角形尖端，最右侧为剑头）
+    setPixel(28, 12, outline);
+    setPixel(29, 13, outline);
+    setPixel(30, 14, outline);
+    setPixel(31, 16, outline);
+    setPixel(30, 18, outline);
+    setPixel(29, 19, outline);
+    setPixel(28, 20, outline);
+    fillRect(28, 14, 2, 5, bladeMid);
+    setPixel(30, 15, bladeLight);
+    setPixel(30, 16, bladeLight);
+    setPixel(30, 17, bladeDark);
+
+    // 十字护手（靠近剑把，垂直于剑身）
+    fillRect(8, 9, 3, 15, guardDark);
+    fillRect(9, 9, 2, 15, guardGold);
+    fillRect(7, 8, 5, 2, guardGold);
+    fillRect(7, 23, 5, 2, guardDark);
+
+    // 剑柄与剑首（左侧，作为玩家手中的轴心）
+    fillRect(3, 14, 6, 5, outline);
+    fillRect(4, 15, 5, 3, hiltBrown);
+    setPixel(5, 15, guardDark);
+    setPixel(7, 17, guardDark);
+    fillRect(1, 13, 3, 7, pommelGold);
+    fillRect(2, 14, 2, 5, guardGold);
+    setPixel(1, 19, guardDark);
+
+    return img;
+}
+
+// ============================================================================
 // CreateItemIcon —— 生成 24x24 装备图标（按槽位类型）
 // ----------------------------------------------------------------------------
 // 6 种装备各有独特外观，便于玩家识别：

@@ -37,6 +37,7 @@
 #include "gameplay/Animation.h"
 #include "gameplay/DungeonGenerator.h"
 #include "gameplay/SkillSystem.h"
+#include "gameplay/PlayerClassTypes.h"
 
 namespace cu {
 
@@ -103,9 +104,12 @@ struct PlayerStats {
 // 存储玩家属性与状态，挂载到玩家实体上。
 struct PlayerComponent {
     PlayerStats stats;
+    PlayerClass playerClass = PlayerClass::Mage;  // 职业（默认法师，保持向后兼容）
     FacingDirection facing = FacingDirection::Down;  // 当前朝向
     PlayerAnimState animState = PlayerAnimState::Idle; // 当前动画状态
     float attackTimer = 0.f;   // 攻击动画剩余时间
+    float swordDisplayTimer = 0.f; // 剑士剑体贴图显示剩余时间（>0 时渲染挥砍剑 sprite）
+    sf::Vector2f lastAttackDir{1.f, 0.f}; // 最近一次攻击方向（归一化，用于剑士剑体贴图旋转）
     float hurtTimer = 0.f;     // 受击动画剩余时间
     bool wasMoving = false;    // 上一帧是否在移动（用于动画状态切换）
 
@@ -200,11 +204,13 @@ struct PlayerSheetInfo {
 // registry: ECS 注册表
 // position: 出生位置（世界坐标）
 // sheetInfo: 玩家贴图在图集中的位置信息
+// playerClass: 职业（默认 Mage，保持向后兼容）
 // 返回玩家实体 ID
 // ============================================================================
 [[nodiscard]] EntityId CreatePlayer(Registry& registry,
                                     sf::Vector2f position,
-                                    const PlayerSheetInfo& sheetInfo);
+                                    const PlayerSheetInfo& sheetInfo,
+                                    PlayerClass playerClass = PlayerClass::Mage);
 
 // ============================================================================
 // UpdatePlayer —— 更新玩家逻辑（每固定步长调用）

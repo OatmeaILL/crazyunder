@@ -35,6 +35,7 @@
 #include <functional>
 #include "gameplay/Player.h"
 #include "gameplay/SkillSystem.h"
+#include "gameplay/PlayerClassTypes.h"
 
 namespace cu {
 
@@ -97,8 +98,9 @@ public:
     [[nodiscard]] int GetSkillPoints() const noexcept { return skillPoints_; }
 
     // 随机抽 3 个未满级升级选项
+    // cls: 玩家职业，用于过滤不适用升级（如剑士不会随机到远程弹幕升级）
     // 若可用升级不足 3 个，则返回的数组中部分选项的 type 为 Count（无效）
-    [[nodiscard]] std::array<UpgradeOption, 3> RollUpgrades();
+    [[nodiscard]] std::array<UpgradeOption, 3> RollUpgrades(PlayerClass cls = PlayerClass::Mage);
 
     // 应用升级到 PlayerStats
     // type: 选择的升级类型

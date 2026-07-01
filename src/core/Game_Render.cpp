@@ -5,6 +5,8 @@
 #include "gameplay/PlayerCombat.h"
 #include "gameplay/CombatEffects.h"
 #include "gameplay/SkillSystem.h"
+#include "gameplay/ClassSystem.h"
+#include "gameplay/Player.h"
 #include <string>
 #include <cstdlib>
 #include <ctime>
@@ -323,6 +325,59 @@ void Game::renderPlaying(float /*alpha*/) {
 
     // 4. 结束场景
     renderer_.EndScene();
+
+    // 4.45 渲染剑士攻击时的旋转剑 sprite（世界空间，此时 view 仍为摄像机视图）
+    // 剑士近战攻击期间（swordDisplayTimer > 0）以玩家位置为轴心渲染像素长剑，
+    // 剑把固定在玩家手中，剑身随攻击方向旋转，并从上往下挥砍。
+    {
+        PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
+        Transform* pt = registry_.GetComponent<Transform>(playerId_);
+        if (pc && pt && IsMeleeClass(pc->playerClass) && pc->swordDisplayTimer > 0.f) {
+            const sf::Texture* atlasTex = atlas_.GetTexture();
+            if (atlasTex && swordRect_.width > 0) {
+                sf::Sprite sword(*atlasTex, swordRect_);
+
+                // 原点设为剑把中心：CreateSwordSprite 现在是水平剑，剑把在左侧，剑尖朝右
+                // 默认剑身方向就是 +X，因此旋转角度可直接使用攻击方向角度
+                sword.setOrigin(4.f, 16.f);
+
+                // 位置：玩家位置（剑把握在玩家手中，作为扇形原点）
+                sword.setPosition(pt->position);
+
+                // 旋转计算：
+                //   当前剑贴图默认剑尖朝右（+X，0°）
+                //   所以 attackAngle=0 时剑尖向右，90 时向下，-90 时向上
+                float attackAngle = std::atan2(pc->lastAttackDir.y, pc->lastAttackDir.x) * 180.f / 3.14159265f;
+
+                // 挥砍弧度动画：swordDisplayTimer 从 0.8→0，挥砍进度 0→1
+                // 前 0.45s 完成挥砍动作，后 0.35s 保持最终姿势淡出
+                const float kSwordTotalTime = 0.8f;
+                const float kSwingTime = 0.45f;
+                float elapsed = kSwordTotalTime - pc->swordDisplayTimer;
+                float swingProgress = std::min(1.f, elapsed / kSwingTime);
+                // 从上往下挥：起始 -60°（剑在扇形上沿），结束 +60°（剑在扇形下沿）
+                float swingOffset = -60.f + 120.f * swingProgress;
+
+                sword.setRotation(attackAngle + swingOffset);
+
+                // 透明度：前 0.45s 完全不透明，后 0.35s 线性淡出
+                float alpha;
+                if (pc->swordDisplayTimer > 0.35f) {
+                    alpha = 255.f;
+                } else {
+                    alpha = 255.f * (pc->swordDisplayTimer / 0.35f);
+                }
+                if (alpha < 0.f) alpha = 0.f;
+                if (alpha > 255.f) alpha = 255.f;
+                sword.setColor(sf::Color(255, 255, 255, static_cast<sf::Uint8>(alpha)));
+
+                // 略微放大让剑更醒目
+                sword.setScale(1.3f, 1.3f);
+
+                window_.draw(sword);
+            }
+        }
+    }
 
     // 4.5 渲染商人头顶文字（世界空间，此时 view 仍为摄像机视图）
     // 直接在商人世界位置上方绘制，摄像机自动处理坐标转换

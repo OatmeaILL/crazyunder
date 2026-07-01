@@ -123,6 +123,10 @@ void Game::setupPlayingScene(bool preserveProgress) {
         LOG_WARN("部分图集图片添加失败，继续构建");
     }
 
+    // 剑士武器贴图（32x32 像素长剑，用于攻击时渲染）
+    ok &= atlas_.AddImageFromMemory("sword_sprite",
+        TextureGenerator::CreateSwordSprite());
+
     // ---- Phase 5: 初始化弹幕系统 ----
     projectileSystem_.Initialize(registry_, atlas_);
 
@@ -137,6 +141,9 @@ void Game::setupPlayingScene(bool preserveProgress) {
     playerSheetInfo_.atlasX = playerRect.left;
     playerSheetInfo_.atlasY = playerRect.top;
     LOG_INFO("玩家 Sprite Sheet 图集位置: (%d, %d)", playerSheetInfo_.atlasX, playerSheetInfo_.atlasY);
+
+    // 缓存剑士武器贴图矩形（供 renderPlaying 渲染旋转剑 sprite 使用）
+    swordRect_ = atlas_.GetPixelRect("sword_sprite");
 
     // ---- Phase 6: 初始化 TileMap 与 RoomSystem ----
     tileMap_.Initialize(atlas_, dungeon_);

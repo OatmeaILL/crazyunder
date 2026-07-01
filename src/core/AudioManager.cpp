@@ -205,7 +205,10 @@ void AudioManager::generateSFXBuffers() {
     loadSoundFromFile(kSFXQuestTip, soundDir + "quest_can_be_complete_tipsound.mp3");
     loadSoundFromFile(kSFXQuestReward, soundDir + "quest_obtain_reward_sound.mp3");
     loadSoundFromFile(kSFXPlayerDeath, soundDir + "player_die_sound.mp3");
-    
+
+    // 剑士挥砍音效
+    loadSoundFromFile(kSFXSwordSweep, soundDir + "sword_attack_sweep_sound.mp3");
+
     LOG_INFO("已加载 %zu 个音效文件", soundBuffers_.size());
 }
 
@@ -264,6 +267,9 @@ void AudioManager::loadSoundFromFile(const std::string& name, const std::string&
             soundBuffers_[name] = generateToneBuffer(1175.f, 0.18f);
         } else if (name == kSFXPlayerDeath) {
             soundBuffers_[name] = generateToneBuffer(220.f, 0.50f);
+        } else if (name == kSFXSwordSweep) {
+            // 剑士挥砍：短促金属呼啸声（噪声 + 衰减）
+            soundBuffers_[name] = generateNoiseBuffer(0.15f);
         }
     }
 }
@@ -282,7 +288,8 @@ bool AudioManager::isValidSFX(const std::string& name) const {
            name == kSFXSell ||
            name == kSFXChallengeComplete || name == kSFXBomberWalk ||
            name == kSFXBomberCharge || name == kSFXVictory ||
-           name == kSFXQuestTip || name == kSFXQuestReward || name == kSFXPlayerDeath;
+           name == kSFXQuestTip || name == kSFXQuestReward || name == kSFXPlayerDeath ||
+           name == kSFXSwordSweep;
 }
 
 } // namespace cu

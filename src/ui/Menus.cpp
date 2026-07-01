@@ -1102,6 +1102,267 @@ void RelicChoiceMenu::Render(sf::RenderTarget& target) const {
 }
 
 // ============================================================================
+// ClassSelectMenu 实现 —— 职业选择菜单
+// ============================================================================
+
+ClassSelectMenu::ClassSelectMenu() {
+    position_ = sf::Vector2f(0.f, 0.f);
+    size_ = sf::Vector2f(1280.f, 720.f);
+    anchor_ = UIAnchor::TopLeft;
+    selectedIndex_ = -1;
+    hoveredCard_ = -1;
+}
+
+void ClassSelectMenu::Initialize(const sf::Font& font) {
+    font_ = &font;
+
+    // 2 张职业卡片水平居中排列
+    float cardW = 340.f;
+    float cardH = 420.f;
+    float spacing = 60.f;
+    float totalW = cardW * 2 + spacing;
+    float startX = (1280.f - totalW) * 0.5f;
+    float startY = (720.f - cardH) * 0.5f - 20.f;
+
+    for (int i = 0; i < static_cast<int>(PlayerClass::Count); ++i) {
+        cardBounds_[i] = sf::FloatRect(
+            startX + i * (cardW + spacing),
+            startY,
+            cardW, cardH);
+    }
+
+    // 确认按钮（底部居中）
+    confirmBtnBounds_ = sf::FloatRect(
+        (1280.f - 200.f) * 0.5f,
+        startY + cardH + 20.f,
+        200.f, 50.f);
+}
+
+int ClassSelectMenu::HandleKeyInput(int key) {
+    // 1 或 2 选择职业
+    int index = -1;
+    if (key == 27 || key == 4) index = 0;  // Num1 or Key1 → Mage
+    else if (key == 28 || key == 5) index = 1;  // Num2 or Key2 → Warrior
+
+    if (index >= 0 && index < static_cast<int>(PlayerClass::Count)) {
+        selectedIndex_ = index;
+        return index;
+    }
+    return -1;
+}
+
+int ClassSelectMenu::HandleMouseClick(sf::Vector2f mousePos) const {
+    // 先检测确认按钮
+    if (confirmBtnBounds_.contains(mousePos)) {
+        return static_cast<int>(PlayerClass::Count);  // 特殊返回值表示确认
+    }
+    // 检测职业卡片
+    for (int i = 0; i < static_cast<int>(PlayerClass::Count); ++i) {
+        if (cardBounds_[i].contains(mousePos)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void ClassSelectMenu::Update(float dt) {
+    blinkTimer_ += dt;
+    if (blinkTimer_ > 10.f) blinkTimer_ = 0.f;
+}
+
+void ClassSelectMenu::Render(sf::RenderTarget& target) const {
+    if (!visible_ || !font_) return;
+
+    // 半透明遮罩
+    sf::RectangleShape overlay(sf::Vector2f(1280.f, 720.f));
+    overlay.setFillColor(sf::Color(10, 15, 30, 240));
+    target.draw(overlay);
+
+    // 标题 "选择你的职业"
+    sf::Text title;
+    title.setFont(*font_);
+    title.setString(U8("选择你的职业"));
+    title.setCharacterSize(44);
+    title.setFillColor(sf::Color(255, 220, 100));
+    title.setStyle(sf::Text::Bold);
+    sf::FloatRect titleBounds = title.getLocalBounds();
+    title.setPosition((1280.f - titleBounds.width) * 0.5f, 60.f);
+    target.draw(title);
+
+    // 副标题提示
+    sf::Text hint;
+    hint.setFont(*font_);
+    hint.setString(U8("点击卡片或按 1/2 键选择职业，确认后不可更改"));
+    hint.setCharacterSize(18);
+    hint.setFillColor(sf::Color(200, 200, 200));
+    sf::FloatRect hintBounds = hint.getLocalBounds();
+    hint.setPosition((1280.f - hintBounds.width) * 0.5f, 115.f);
+    target.draw(hint);
+
+    // 绘制职业卡片
+    for (int i = 0; i < static_cast<int>(PlayerClass::Count); ++i) {
+        const auto& bounds = cardBounds_[i];
+        PlayerClass cls = static_cast<PlayerClass>(i);
+        const ClassData& cd = GetClassData(cls);
+
+        sf::RectangleShape cardBg(sf::Vector2f(bounds.width, bounds.height));
+        cardBg.setPosition(bounds.left, bounds.top);
+
+        if (i == selectedIndex_) {
+            // 已选中：主题色边框 + 亮背景
+            cardBg.setFillColor(sf::Color(50, 55, 70, 240));
+            cardBg.setOutlineColor(cd.themeColor);
+            cardBg.setOutlineThickness(3.f);
+        } else if (i == hoveredCard_) {
+            // 悬停：半透明主题色边框
+            cardBg.setFillColor(sf::Color(40, 45, 60, 230));
+            cardBg.setOutlineColor(cd.themeColor);
+            cardBg.setOutlineThickness(2.5f);
+        } else {
+            // 正常状态
+            cardBg.setFillColor(sf::Color(30, 30, 45, 220));
+            cardBg.setOutlineColor(sf::Color(80, 80, 100));
+            cardBg.setOutlineThickness(1.5f);
+        }
+        target.draw(cardBg);
+
+        // ---- 卡片编号 ----
+        sf::Text number;
+        number.setFont(*font_);
+        number.setString(std::to_string(i + 1));
+        number.setCharacterSize(28);
+        number.setFillColor(sf::Color(255, 220, 100));
+        number.setStyle(sf::Text::Bold);
+        number.setPosition(bounds.left + 14.f, bounds.top + 14.f);
+        target.draw(number);
+
+        // ---- 选中标记 ----
+        if (i == selectedIndex_) {
+            sf::Text check;
+            check.setFont(*font_);
+            check.setString(U8("✓ 已选择"));
+            check.setCharacterSize(18);
+            check.setFillColor(cd.themeColor);
+            check.setStyle(sf::Text::Bold);
+            sf::FloatRect cb = check.getLocalBounds();
+            check.setPosition(bounds.left + bounds.width - cb.width - 14.f, bounds.top + 12.f);
+            target.draw(check);
+        }
+
+        // ---- 武器图标色块 ----
+        sf::RectangleShape icon(sf::Vector2f(72.f, 72.f));
+        icon.setFillColor(sf::Color(cd.themeColor.r, cd.themeColor.g, cd.themeColor.b, 200));
+        icon.setOutlineColor(sf::Color(255, 255, 255, 180));
+        icon.setOutlineThickness(2.f);
+        icon.setPosition(bounds.left + (bounds.width - 72.f) * 0.5f, bounds.top + 55.f);
+        target.draw(icon);
+
+        // 武器名称（图标内）
+        sf::Text weaponName;
+        weaponName.setFont(*font_);
+        weaponName.setString(utf8ToSfString(cd.weaponName));
+        weaponName.setCharacterSize(20);
+        weaponName.setFillColor(sf::Color::White);
+        weaponName.setStyle(sf::Text::Bold);
+        sf::FloatRect wnb = weaponName.getLocalBounds();
+        weaponName.setPosition(
+            icon.getPosition().x + (72.f - wnb.width) * 0.5f,
+            icon.getPosition().y + (72.f - wnb.height) * 0.5f - 4.f);
+        target.draw(weaponName);
+
+        // ---- 职业名称（大字） ----
+        sf::Text className;
+        className.setFont(*font_);
+        className.setString(utf8ToSfString(cd.name));
+        className.setCharacterSize(32);
+        className.setFillColor(cd.themeColor);
+        className.setStyle(sf::Text::Bold);
+        sf::FloatRect cnb = className.getLocalBounds();
+        className.setPosition(
+            bounds.left + (bounds.width - cnb.width) * 0.5f,
+            bounds.top + 145.f);
+        target.draw(className);
+
+        // ---- 职业描述 ----
+        sf::Text desc;
+        desc.setFont(*font_);
+        desc.setString(utf8ToSfString(cd.description));
+        desc.setCharacterSize(14);
+        desc.setFillColor(sf::Color(210, 210, 220));
+        sf::FloatRect db = desc.getLocalBounds();
+        desc.setPosition(
+            bounds.left + (bounds.width - db.width) * 0.5f,
+            bounds.top + 190.f);
+        target.draw(desc);
+
+        // ---- 基础数值对比 ----
+        float statY = bounds.top + 270.f;
+        const float statLineH = 20.f;
+        auto drawStat = [&](const sf::String& label, const sf::String& value, sf::Color vColor) {
+            sf::Text lbl;
+            lbl.setFont(*font_);
+            lbl.setString(label);
+            lbl.setCharacterSize(14);
+            lbl.setFillColor(sf::Color(180, 180, 190));
+            lbl.setPosition(bounds.left + 24.f, statY);
+            target.draw(lbl);
+
+            sf::Text val;
+            val.setFont(*font_);
+            val.setString(value);
+            val.setCharacterSize(14);
+            val.setFillColor(vColor);
+            val.setStyle(sf::Text::Bold);
+            sf::FloatRect vb = val.getLocalBounds();
+            val.setPosition(bounds.left + bounds.width - vb.width - 24.f, statY);
+            target.draw(val);
+            statY += statLineH;
+        };
+
+        drawStat(U8("生命"), sf::String(std::to_string(static_cast<int>(cd.maxHp))), sf::Color(220, 60, 60));
+        drawStat(U8("法力"), sf::String(std::to_string(static_cast<int>(cd.maxMp))), sf::Color(60, 120, 220));
+        drawStat(U8("伤害"), sf::String(std::to_string(static_cast<int>(cd.damage))), sf::Color(255, 200, 60));
+        drawStat(U8("攻速"), sf::String(std::to_string(static_cast<int>(cd.attackSpeed * 10)) + "." + std::to_string(static_cast<int>(cd.attackSpeed * 100) % 10)), sf::Color(180, 220, 180));
+        drawStat(U8("移速"), sf::String(std::to_string(static_cast<int>(cd.moveSpeed))), sf::Color(180, 200, 255));
+        drawStat(U8("暴击"), sf::String(std::to_string(static_cast<int>(cd.critChance * 100)) + "%"), sf::Color(255, 180, 255));
+        drawStat(U8("爆伤"), sf::String(std::to_string(static_cast<int>(cd.critDamage * 100)) + "%"), sf::Color(255, 120, 120));
+        drawStat(U8("防御"), sf::String(std::to_string(static_cast<int>(cd.defense))), sf::Color(200, 200, 200));
+    }
+
+    // ---- 确认按钮 ----
+    {
+        sf::RectangleShape btn(sf::Vector2f(confirmBtnBounds_.width, confirmBtnBounds_.height));
+        btn.setPosition(confirmBtnBounds_.left, confirmBtnBounds_.top);
+
+        if (selectedIndex_ >= 0) {
+            btn.setFillColor(sf::Color(60, 120, 80));
+            btn.setOutlineColor(sf::Color(100, 200, 120));
+        } else {
+            // 未选择时闪烁提示
+            float blink = 0.5f + 0.5f * std::sin(blinkTimer_ * 4.f);
+            uint8_t alpha = static_cast<uint8_t>(100 + 60 * blink);
+            btn.setFillColor(sf::Color(60, 60, 80, alpha));
+            btn.setOutlineColor(sf::Color(120, 120, 140, alpha));
+        }
+        btn.setOutlineThickness(2.f);
+        target.draw(btn);
+
+        sf::Text btnText;
+        btnText.setFont(*font_);
+        btnText.setString(U8("确认选择"));
+        btnText.setCharacterSize(22);
+        btnText.setFillColor(selectedIndex_ >= 0 ? sf::Color::White : sf::Color(150, 150, 150));
+        btnText.setStyle(sf::Text::Bold);
+        sf::FloatRect btnBounds = btnText.getLocalBounds();
+        btnText.setPosition(
+            confirmBtnBounds_.left + (confirmBtnBounds_.width - btnBounds.width) * 0.5f,
+            confirmBtnBounds_.top + (confirmBtnBounds_.height - btnBounds.height) * 0.5f - 4.f);
+        target.draw(btnText);
+    }
+}
+
+
+// ============================================================================
 // InventoryMenu 实现
 // ============================================================================
 
@@ -3187,6 +3448,7 @@ void SaveLoadMenu::Render(sf::RenderTarget& target) const {
             };
             drawLine(U8("层数：") + std::to_string(info.level));
             drawLine(U8("玩家等级：") + std::to_string(info.playerLevel));
+            drawLine(U8("职业：") + utf8ToSfString(GetClassName(info.playerClass)));
             drawLine(U8("击杀：") + std::to_string(info.kills));
             drawLine(U8("存活：") + formatTime(info.survivalTime));
             drawLine(U8("金币：") + std::to_string(info.coins));

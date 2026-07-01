@@ -35,6 +35,7 @@
 #include "gameplay/MerchantSystem.h"
 #include "gameplay/SkillSystem.h"
 #include "gameplay/RelicSystem.h"
+#include "gameplay/ClassSystem.h"
 #include "core/SaveSystem.h"
 
 namespace cu {
@@ -252,6 +253,52 @@ private:
     int selectedIndex_ = -1;
 };
 
+
+
+// ============================================================================
+// ClassSelectMenu —— 职业选择菜单（新游戏时弹出）
+// ----------------------------------------------------------------------------
+// 布局：
+//   顶部标题 "选择你的职业"
+//   中部 2 张职业卡片水平排列（法师/剑士）
+//   每张卡片显示：职业名、武器图标色块、描述、基础数值对比
+//   底部 "确认" 按钮（需先选择职业）
+//
+// 交互：
+//   鼠标悬停 → 边框高亮（主题色）
+//   鼠标点击卡片 或 按 1/2 键 → 选择对应职业
+//   选择后点击 "确认" 或按 Enter → 确认选择，进入下一步
+// ============================================================================
+class ClassSelectMenu : public UIElement {
+public:
+    ClassSelectMenu();
+
+    void Initialize(const sf::Font& font);
+
+    // 处理按键输入（1/2 选择），返回选中的索引（-1=未选择）
+    int HandleKeyInput(int key);
+
+    // 检查鼠标点击是否命中卡片，返回索引（-1=未命中）
+    [[nodiscard]] int HandleMouseClick(sf::Vector2f mousePos) const;
+
+    // 设置悬停卡片索引（-1=无悬停）
+    void SetHoveredCard(int index) { hoveredCard_ = index; }
+
+    [[nodiscard]] int GetSelectedIndex() const noexcept { return selectedIndex_; }
+    void ResetSelection() { selectedIndex_ = -1; hoveredCard_ = -1; }
+
+    void Update(float dt) override;
+    void Render(sf::RenderTarget& target) const override;
+
+private:
+    const sf::Font* font_ = nullptr;
+    std::array<sf::FloatRect, static_cast<size_t>(PlayerClass::Count)> cardBounds_{};
+    int hoveredCard_ = -1;
+    int selectedIndex_ = -1;
+    // 确认按钮
+    sf::FloatRect confirmBtnBounds_;
+    float blinkTimer_ = 0.f;
+};
 
 
 // ============================================================================

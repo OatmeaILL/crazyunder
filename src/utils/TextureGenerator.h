@@ -99,6 +99,10 @@ public:
     // 宝箱怪：外观与宝箱相同（伪装），此处复用 CreateChestTile 即可
     // 注意：宝箱怪使用 TileType::Chest 渲染，无需独立贴图
 
+    // ---- 剑士武器贴图 ----
+    // 生成 32x32 长剑贴图（剑身 + 护手 + 剑柄），用于剑士攻击视觉
+    [[nodiscard]] static sf::Image CreateSwordSprite();
+
     // 生成 24x24 装备图标（按槽位类型）
     // Weapon: 剑形（对角线 + 护手）
     // Helmet: 头盔（半圆 + 顶饰）

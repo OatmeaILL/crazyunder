@@ -5,6 +5,7 @@
 #include "gameplay/EnemyAI.h"   // EnemyComponent（AOE 只伤害敌人）
 #include "gameplay/DungeonGenerator.h" // Dungeon, TileType
 #include "gameplay/SkillSystem.h"
+#include "gameplay/ClassSystem.h"
 #include "core/Input.h"
 #include "core/AudioManager.h"
 #include "rendering/Camera.h"
@@ -25,7 +26,7 @@ void UpdatePlayerCombat(Registry& registry, const Input& input,
                         EntityId player, ProjectileSystem& projectiles,
                         ParticleSystem& particles, Camera& camera,
                         UniformGrid& grid, CombatSystem& combat,
-                        const Dungeon* dungeon, float dt) {
+                        Dungeon* dungeon, float dt) {
     Transform* transform = registry.GetComponent<Transform>(player);
     PlayerComponent* playerComp = registry.GetComponent<PlayerComponent>(player);
     Velocity* velocity = registry.GetComponent<Velocity>(player);
@@ -36,6 +37,11 @@ void UpdatePlayerCombat(Registry& registry, const Input& input,
     // ---- 1. 衰减冷却计时器 ----
     if (playerComp->attackCooldown > 0.f) {
         playerComp->attackCooldown -= dt;
+    }
+    // 剑士剑体贴图显示计时器衰减（独立于 attackTimer，显示时间更长）
+    if (playerComp->swordDisplayTimer > 0.f) {
+        playerComp->swordDisplayTimer -= dt;
+        if (playerComp->swordDisplayTimer < 0.f) playerComp->swordDisplayTimer = 0.f;
     }
     if (playerComp->dodgeCooldown > 0.f) {
         playerComp->dodgeCooldown -= dt;
@@ -126,80 +132,200 @@ void UpdatePlayerCombat(Registry& registry, const Input& input,
         }
     }
 
-    // ---- 3. 普攻（左键）----
+   // ---- 3. 普攻（左键）----
     // 攻击间隔 = 1 / attackSpeed
-    // 左键按下且冷却结束 → 发射子弹
+    // 左键按下且冷却结束 → 根据职业执行不同攻击
     if (input.IsMouseDown(sf::Mouse::Left) && playerComp->attackCooldown <= 0.f) {
         // 计算攻击间隔
         float attackInterval = 1.f / playerComp->stats.attackSpeed;
         playerComp->attackCooldown = attackInterval;
 
-        // 计算射击方向（玩家 → 鼠标世界坐标）
+        // 计算攻击方向（玩家 → 鼠标世界坐标）
         sf::Vector2f mouseWorld = input.GetMouseWorldPosition(camera);
-        sf::Vector2f shootDir = mouseWorld - transform->position;
-        // 归一化
-        float lenSq = shootDir.x * shootDir.x + shootDir.y * shootDir.y;
+        sf::Vector2f attackDir = mouseWorld - transform->position;
+        float lenSq = attackDir.x * attackDir.x + attackDir.y * attackDir.y;
         if (lenSq > 0.0001f) {
             float len = std::sqrt(lenSq);
-            shootDir /= len;
+            attackDir /= len;
         } else {
-            shootDir = sf::Vector2f(1.f, 0.f);
+            attackDir = sf::Vector2f(1.f, 0.f);
         }
-
-        // 配置子弹
-        ProjectileConfig config;
-        config.speed = 500.f;
-        config.damage = playerComp->stats.damage;
-        // 狂暴加成：+50%伤害，并赋予 Fire 元素（第十六轮新增）
-        // 设计意图：让狂暴从"纯数值增益"升级为"玩法流派切换"——
-        // 激活狂暴期间，普攻不仅伤害更高，还会附加燃烧 DoT（每 0.5s
-        // 造成 20% 子弹伤害，持续 3s），形成"狂暴火攻流"build。
-        // 子弹颜色从黄白变为橙红，视觉上明确告知玩家元素切换。
-        bool berserkActive = (playerComp->berserkTimer > 0.f);
-        // ---- 第十九轮新增：闪电流元素切换 ----
-        // 拥有 chainLightning 升级 OR 当前层为雷暴领域时，普攻子弹自动附加 Lightning 元素
-        // （狂暴优先级更高，激活时仍保持 Fire 元素以维持"火攻流"build）
-        // 设计意图：让 chainLightning 升级从"纯数值连锁"升级为"闪电流 build"——
-        // 子弹不仅会连锁到附近敌人，还会施加 0.6s 麻痹（完全禁锢），
-        // 形成"控制流"玩法。子弹颜色从黄白变为亮黄，视觉上明确元素切换。
-        // 雷暴领域层修饰符扩展：即使未升级 chainLightning，进入雷暴领域层也可触发闪电元素，
-        // 让"闪电流 build"从"圣物+升级"二维拓展到"层修饰符"第三维度
-        bool hasChainLightning = (playerComp->stats.chainLightning > 0);
-        bool floorLightning = playerComp->stats.floorLightningActive; // 第十九轮新增：雷暴领域
-        if (berserkActive) {
-            config.damage *= 1.5f;
-            config.element = ElementType::Fire;
-            config.color = sf::Color(255, 110, 50, 255); // 橙红色（火元素标识）
-        } else if (hasChainLightning || floorLightning) {
-            // 第十九轮新增：闪电流——普攻附加 Lightning 元素
-            config.element = ElementType::Lightning;
-            config.color = sf::Color(255, 230, 80, 255); // 亮黄色（闪电元素标识）
-        } else {
-            config.element = ElementType::Physical;
-            config.color = sf::Color(255, 255, 100, 255); // 黄白色子弹
-        }
-        // 吸血打击加成：持续时间内所有攻击吸血（比例随等级 30%+10%*(lv-1)）
-        float lifestealBonus = 0.f;
-        if (playerComp->leechStrikeActive > 0.f) {
-            lifestealBonus = 0.3f + 0.1f * (playerComp->leechStrikeLevel - 1);
-            // 不再重置 leechStrikeActive，持续到时间结束
-        }
-        config.pierce = 0 + playerComp->stats.projectileBonusPierce; // 普通子弹命中即销毁（pierce=0），仅升级加成提供穿透
-        config.lifetime = 2.f;
-        config.radius = 6.f;
-        config.splitCount = playerComp->stats.projectileBonusSplit;
-        config.chainCount = playerComp->stats.chainLightning;
-        config.knockback = 150.f;
-        config.lifesteal = playerComp->stats.lifesteal + lifestealBonus;
-
-        // 从玩家位置发射
-        projectiles.Spawn(transform->position, shootDir, config, player);
-
-        // 射击音效
-        AudioManager::Instance().PlaySFX(AudioManager::kSFXShoot);
 
         // 触发攻击动画
         playerComp->attackTimer = 0.2f;
+
+        if (IsMeleeClass(playerComp->playerClass)) {
+            // 剑士：剑体贴图显示时间更长（0.8s），让玩家看清剑头方向和挥砍轨迹
+            playerComp->swordDisplayTimer = 0.8f;
+            // ---- 剑士：近战扇形斩击 ----
+            // 攻击范围：前方 120° 扇形，半径 80px
+            const float kMeleeRange = 80.f;
+            const float kMeleeAngle = 60.f; // 半角 60°，全角 120°
+            float cosHalfAngle = std::cos(kMeleeAngle * 3.14159265f / 180.f); // cos(60°) = 0.5
+
+            // 记录攻击方向供渲染剑体贴图使用
+            playerComp->lastAttackDir = attackDir;
+
+            // 屏幕震动（轻微）
+            camera.Shake(3.f, 0.1f);
+
+            // 斩击粒子特效（扇形方向上的弧形粒子爆发）
+            {
+                // 在攻击方向上生成扇形粒子
+                float baseAngle = std::atan2(attackDir.y, attackDir.x);
+                EmitConfig cfg;
+                cfg.radial = false;
+                cfg.speedMin = 100.f;
+                cfg.speedMax = 250.f;
+                cfg.colorMin = sf::Color(255, 200, 80, 255);
+                cfg.colorMax = sf::Color(255, 240, 150, 255);
+                cfg.sizeMin = 3.f;
+                cfg.sizeMax = 7.f;
+                cfg.lifeMin = 0.15f;
+                cfg.lifeMax = 0.3f;
+                // 在扇形范围内随机方向生成粒子
+                for (int i = 0; i < 12; ++i) {
+                    float spread = (std::rand() % 120 - 60) * 3.14159265f / 180.f; // -60° ~ +60°
+                    float angle = baseAngle + spread;
+                    sf::Vector2f dir(std::cos(angle), std::sin(angle));
+                    sf::Vector2f pos = transform->position + dir * 40.f;
+                    particles.Emit(pos, 1, cfg);
+                }
+            }
+
+            // 音效（剑士专属挥砍音效）
+            AudioManager::Instance().PlaySFX(AudioManager::kSFXSwordSweep);
+
+            // 查询范围内敌人
+            std::vector<EntityId> targets;
+            targets.reserve(32);
+            grid.QueryRange(transform->position, kMeleeRange, targets);
+
+            float meleeDamage = playerComp->stats.damage;
+            // 狂暴加成
+            bool berserkActive = (playerComp->berserkTimer > 0.f);
+            if (berserkActive) {
+                meleeDamage *= 1.5f;
+            }
+
+            for (EntityId tid : targets) {
+                if (tid == player) continue;
+                EnemyComponent* te = registry.GetComponent<EnemyComponent>(tid);
+                if (!te || !te->active) continue;
+                Transform* tt = registry.GetComponent<Transform>(tid);
+                if (!tt) continue;
+
+                sf::Vector2f toTarget = tt->position - transform->position;
+                float dist = std::sqrt(toTarget.x * toTarget.x + toTarget.y * toTarget.y);
+                if (dist > kMeleeRange) continue;
+
+                // 扇形角度判定
+                if (dist > 0.1f) {
+                    sf::Vector2f normTarget = toTarget / dist;
+                    float dot = normTarget.x * attackDir.x + normTarget.y * attackDir.y;
+                    if (dot < cosHalfAngle) continue; // 超出扇形范围
+                }
+
+                // 施加伤害
+                DamageInfo dmg;
+                dmg.attacker = player;
+                dmg.target = tid;
+                dmg.amount = meleeDamage;
+                dmg.isCritical = false;
+                dmg.element = berserkActive ? ElementType::Fire : ElementType::Physical;
+                dmg.knockback = (dist > 0.1f) ? (toTarget / dist) * 200.f : sf::Vector2f(0.f, 0.f);
+                dmg.lifesteal = playerComp->stats.lifesteal;
+                combat.ApplyDamage(registry, dmg);
+            }
+
+            // ---- 破坏扇形范围内的罐子和门 ----
+            // 近战攻击可以破坏前方扇形区域内的可破坏物
+            if (dungeon && !dungeon->tiles.empty()) {
+                // 遍历玩家周围 kMeleeRange+32 范围内的 tile
+                sf::Vector2i playerTile = dungeon->WorldToTile(transform->position);
+                int tileRange = static_cast<int>(kMeleeRange / 32.f) + 1;
+                for (int ty = playerTile.y - tileRange; ty <= playerTile.y + tileRange; ++ty) {
+                    for (int tx = playerTile.x - tileRange; tx <= playerTile.x + tileRange; ++tx) {
+                        if (tx < 0 || tx >= dungeon->width || ty < 0 || ty >= dungeon->height) continue;
+
+                        TileType t = dungeon->GetTile(tx, ty);
+                        if (t != TileType::Obstacle && t != TileType::Door) continue;
+
+                        // 计算 tile 中心到玩家的距离和角度
+                        sf::Vector2f tileCenter = dungeon->TileCenterToWorld(sf::Vector2i(tx, ty));
+                        sf::Vector2f toTile = tileCenter - transform->position;
+                        float tileDist = std::sqrt(toTile.x * toTile.x + toTile.y * toTile.y);
+                        if (tileDist > kMeleeRange) continue;
+
+                        // 扇形角度判定
+                        if (tileDist > 0.1f) {
+                            sf::Vector2f normTile = toTile / tileDist;
+                            float dot = normTile.x * attackDir.x + normTile.y * attackDir.y;
+                            if (dot < cosHalfAngle) continue;
+                        }
+
+                        if (t == TileType::Obstacle) {
+                            // 破坏罐子
+                            dungeon->SetTile(tx, ty, TileType::Floor);
+                            particles.Explosion(tileCenter);
+                            if (projectiles.onPotBroken) {
+                                projectiles.onPotBroken(tileCenter);
+                            }
+                            LOG_INFO("剑士近战破坏罐子 (%d,%d)", tx, ty);
+                        } else if (t == TileType::Door) {
+                            // 破坏门
+                            DoorState* ds = dungeon->GetDoorState(tx, ty);
+                            if (ds && !ds->open) {
+                                ds->hp -= meleeDamage;
+                                particles.HitSpark(tileCenter);
+                                if (ds->hp <= 0.f) {
+                                    dungeon->SetTile(tx, ty, TileType::Floor);
+                                    dungeon->doorStates.erase(ty * dungeon->width + tx);
+                                    particles.Explosion(tileCenter);
+                                    if (projectiles.onDoorBroken) {
+                                        projectiles.onDoorBroken(tileCenter);
+                                    }
+                                    LOG_INFO("剑士近战破坏门 (%d,%d)", tx, ty);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // ---- 法师：远程弹幕攻击（原有逻辑）----
+            ProjectileConfig config;
+            config.speed = 500.f;
+            config.damage = playerComp->stats.damage;
+            bool berserkActive = (playerComp->berserkTimer > 0.f);
+            bool hasChainLightning = (playerComp->stats.chainLightning > 0);
+            bool floorLightning = playerComp->stats.floorLightningActive;
+            if (berserkActive) {
+                config.damage *= 1.5f;
+                config.element = ElementType::Fire;
+                config.color = sf::Color(255, 110, 50, 255);
+            } else if (hasChainLightning || floorLightning) {
+                config.element = ElementType::Lightning;
+                config.color = sf::Color(255, 230, 80, 255);
+            } else {
+                config.element = ElementType::Physical;
+                config.color = sf::Color(255, 255, 100, 255);
+            }
+            float lifestealBonus = 0.f;
+            if (playerComp->leechStrikeActive > 0.f) {
+                lifestealBonus = 0.3f + 0.1f * (playerComp->leechStrikeLevel - 1);
+            }
+            config.pierce = 0 + playerComp->stats.projectileBonusPierce;
+            config.lifetime = 2.f;
+            config.radius = 6.f;
+            config.splitCount = playerComp->stats.projectileBonusSplit;
+            config.chainCount = playerComp->stats.chainLightning;
+            config.knockback = 150.f;
+            config.lifesteal = playerComp->stats.lifesteal + lifestealBonus;
+
+            projectiles.Spawn(transform->position, attackDir, config, player);
+            AudioManager::Instance().PlaySFX(AudioManager::kSFXShoot);
+        }
     }
 
     // ---- 4. 闪避（右键）----

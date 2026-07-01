@@ -95,6 +95,7 @@ add_executable(crazyunder
     src/gameplay/FloorModifier.cpp
     src/gameplay/SoulMemorySystem.cpp
     src/gameplay/DialogueSystem.cpp
+    src/gameplay/ClassSystem.cpp
     src/rendering/TileMap.cpp
     src/ui/UIManager.cpp
     src/ui/HUD.cpp

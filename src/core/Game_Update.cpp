@@ -5,6 +5,7 @@
 #include "gameplay/PlayerCombat.h"
 #include "gameplay/CombatEffects.h"
 #include "gameplay/SkillSystem.h"
+#include "gameplay/ClassSystem.h"
 #include <string>
 #include <cstdlib>
 #include <ctime>
@@ -409,11 +410,14 @@ void Game::updatePlaying(float dt) {
         }
     }
 
-    // ---- 法力回复（玩家 ManaRegen 升级 + 装备词缀）----
+    // ---- 法力回复（基础 +1/秒 + ManaRegen 升级/装备词缀加成）----
+    // 基础回复 1 点/秒，确保所有职业都有最低法力再生能力；
+    // manaRegen 字段叠加额外回复（由装备词缀/圣物提供）
     {
         PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
-        if (pc && pc->stats.manaRegen > 0.f) {
-            float regen = pc->stats.manaRegen * dt;
+        if (pc) {
+            // 基础 1.0/秒 + 额外 manaRegen
+            float regen = (1.f + pc->stats.manaRegen) * dt;
             manaRegenAccumulator_ += regen;
             if (manaRegenAccumulator_ >= 1.f) {
                 int regenInt = static_cast<int>(manaRegenAccumulator_);
@@ -663,15 +667,9 @@ void Game::recomputePlayerStats() {
     PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
     if (!pc) return;
 
-    // 1. 重置为基础属性
+   // 1. 根据职业重置为基础属性
     PlayerStats& s = pc->stats;
-    s.moveSpeed = 200.f;
-    s.attackSpeed = 2.0f;
-    s.damage = 10.f;
-    s.maxHp = 100.f;
-    s.maxMp = 50.f;
-    s.critChance = 0.15f;
-    s.critDamage = 1.5f;
+    ApplyClassBaseStats(s, pc->playerClass);
     s.lifesteal = 0.f;
     s.pickupRange = 80.f;
     s.expMultiplier = 1.f;
@@ -681,7 +679,7 @@ void Game::recomputePlayerStats() {
     s.chainLightning = 0;
     s.aoeCooldownReduce = 0.f;
     s.dodgeCooldownReduce = 0.f;
-    s.defense = 0.f;
+    // s.defense 已由 ApplyClassBaseStats 设置（剑士=5，法师=0）
     s.manaRegen = 0.f;
     s.lightningDurationMul = 1.f; // 第十九轮新增：重置 Lightning 麻痹倍率
     s.floorLightningActive = false; // 第十九轮新增：重置雷暴领域标志（由变异系统重新设置）

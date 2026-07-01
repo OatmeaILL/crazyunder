@@ -148,6 +148,9 @@ void SaveSystem::writeSaveData(std::ofstream& ofs, const SaveData& data) const {
     // ---- 玩家状态 ----
     writePOD(ofs, &data.playerHp, sizeof(data.playerHp));
     writePOD(ofs, &data.coins, sizeof(data.coins));
+    // 职业（1 字节）
+    uint8_t cls = static_cast<uint8_t>(data.playerClass);
+    writePOD(ofs, &cls, sizeof(cls));
 
     // ---- 升级系统 ----
     writePOD(ofs, &data.playerLevel, sizeof(data.playerLevel));
@@ -229,6 +232,15 @@ bool SaveSystem::readSaveData(std::ifstream& ifs, SaveData& data) const {
     // ---- 玩家状态 ----
     if (!readPOD(ifs, &data.playerHp, sizeof(data.playerHp))) return false;
     if (!readPOD(ifs, &data.coins, sizeof(data.coins))) return false;
+    // 职业（1 字节）
+    {
+        uint8_t cls = 0;
+        if (!readPOD(ifs, &cls, sizeof(cls))) return false;
+        if (cls >= static_cast<uint8_t>(PlayerClass::Count)) {
+            cls = 0; // 回退到法师
+        }
+        data.playerClass = static_cast<PlayerClass>(cls);
+    }
 
     // ---- 升级系统 ----
     if (!readPOD(ifs, &data.playerLevel, sizeof(data.playerLevel))) return false;
@@ -359,6 +371,7 @@ SaveSlotInfo SaveSystem::GetSlotInfo(int slot) const {
     info.survivalTime = data.survivalTime;
     info.coins = data.coins;
     info.playerLevel = data.playerLevel;
+    info.playerClass = data.playerClass;
     info.timestamp = data.timestamp;
     return info;
 }

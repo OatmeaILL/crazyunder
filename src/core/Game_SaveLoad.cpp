@@ -5,6 +5,7 @@
 #include "gameplay/PlayerCombat.h"
 #include "gameplay/CombatEffects.h"
 #include "gameplay/SkillSystem.h"
+#include "gameplay/ClassSystem.h"
 #include <string>
 #include <cstdlib>
 #include <ctime>
@@ -31,6 +32,7 @@ SaveData Game::buildSaveData() {
         data.coins = pc->stats.coins;
         data.skillSlots = pc->skillSlots;
         data.skillBackpack = pc->skillBackpack;
+        data.playerClass = pc->playerClass;
     }
     if (hp) {
         data.playerHp = hp->current;
@@ -123,6 +125,7 @@ void Game::applySaveData(const SaveData& data) {
     PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
     Health* hp = registry_.GetComponent<Health>(playerId_);
     if (pc) {
+        pc->playerClass = data.playerClass;
         pc->stats.coins = data.coins;
         pc->skillSlots = data.skillSlots;
         pc->skillBackpack = data.skillBackpack;
@@ -171,6 +174,26 @@ void Game::applySaveData(const SaveData& data) {
 void Game::refreshSaveSlotInfo() {
     auto allInfo = saveSystem_.GetAllSlotInfo();
     saveLoadMenu_.SetSlotInfo(allInfo);
+}
+
+void Game::showClassSelectMenu() {
+    classSelectMenu_.ResetSelection();
+    classSelectMenu_.SetVisible(true);
+    classSelectMenuVisible_ = true;
+    LOG_INFO("职业选择菜单已显示");
+}
+
+void Game::handleClassSelectMenuClick(int /*index*/) {
+    if (classSelectMenu_.GetSelectedIndex() < 0) return;
+
+    selectedClass_ = static_cast<PlayerClass>(classSelectMenu_.GetSelectedIndex());
+    classSelectMenuVisible_ = false;
+    classSelectMenu_.SetVisible(false);
+    AudioManager::Instance().PlaySFX(AudioManager::kSFXPickup);
+    LOG_INFO("职业已选择: %s", GetClassName(selectedClass_));
+
+    // 确认后弹出存档槽位选择
+    showSaveLoadMenu(SaveLoadMenu::Mode::SaveNew);
 }
 
 void Game::showSaveLoadMenu(SaveLoadMenu::Mode mode) {
@@ -254,6 +277,20 @@ void Game::handleSaveLoadMenuClick(int action) {
             mainMenu_.SetVisible(false);
             state_ = GameState::Playing;
             setupPlayingScene(false);
+            // 创建玩家后设置职业（setupPlayingScene 中 CreatePlayer 使用默认 Mage，此处覆盖）
+            PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
+            if (pc) {
+                pc->playerClass = selectedClass_;
+                // 重新计算属性以应用职业基础数值
+                recomputePlayerStats();
+                // 更新 Health 组件的职业 HP
+                Health* h = registry_.GetComponent<Health>(playerId_);
+                if (h) {
+                    const ClassData& cd = GetClassData(selectedClass_);
+                    h->max = cd.maxHp;
+                    h->current = cd.maxHp;
+                }
+            }
             // 首次进入游戏时显示按键教程
             if (!tutorialShown_) {
                 tutorialVisible_ = true;
@@ -262,7 +299,7 @@ void Game::handleSaveLoadMenuClick(int action) {
             AudioManager::Instance().PlayBGM(AudioManager::kBGMDungeon);
             // 立即保存（记录新游戏起始状态）
             autoSaveCurrent();
-            LOG_INFO("新游戏已开始，存档到槽位 %d", slot);
+            LOG_INFO("新游戏已开始，存档到槽位 %d，职业: %s", slot, GetClassName(selectedClass_));
         }
     }
 }

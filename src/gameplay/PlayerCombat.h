@@ -66,7 +66,7 @@ void UpdatePlayerCombat(Registry& registry, const Input& input,
                         EntityId player, ProjectileSystem& projectiles,
                         ParticleSystem& particles, Camera& camera,
                         UniformGrid& grid, CombatSystem& combat,
-                        const Dungeon* dungeon, float dt);
+                        Dungeon* dungeon, float dt);
 
 // ---- 战斗参数常量 ----
 inline constexpr float kDodgeCooldown = 1.5f;        // 闪避冷却（秒）

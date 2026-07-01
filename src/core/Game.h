@@ -62,6 +62,7 @@
 #include "gameplay/QuestSystem.h"
 #include "gameplay/AchievementSystem.h"
 #include "gameplay/RelicSystem.h"
+#include "gameplay/ClassSystem.h"
 #include "gameplay/FloorModifier.h"
 #include "gameplay/SoulMemorySystem.h"
 #include "gameplay/DialogueSystem.h"
@@ -154,6 +155,10 @@ private:
     void showSaveLoadMenu(SaveLoadMenu::Mode mode);
     // 处理存档菜单点击（action: 0=无 1-3=选槽 4=返回 5-7=删槽）
     void handleSaveLoadMenuClick(int action);
+    // 显示职业选择菜单
+    void showClassSelectMenu();
+    // 处理职业选择菜单点击
+    void handleClassSelectMenuClick(int action);
     // 保存当前进度到 currentSlot_（nextLevel 自动调用）
     void autoSaveCurrent();
     // 刷新存档菜单的槽位信息（每次显示前调用）
@@ -196,6 +201,7 @@ private:
     Input input_;
     AnimationSystem animationSystem_;
     PlayerSheetInfo playerSheetInfo_; // 玩家贴图在图集中的位置
+    sf::IntRect swordRect_;           // 剑士武器贴图在图集中的像素矩形
 
     EntityId playerId_ = kInvalidEntity; // 玩家实体 ID
     bool debugMode_ = false;             // F1 调试信息开关
@@ -286,6 +292,9 @@ private:
     bool achievementMenuVisible_ = false; // 成就菜单是否可见
     bool relicPanelVisible_ = false;      // 圣物查看面板是否可见（R 键切换）
     bool soulWellMenuVisible_ = false;    // 灵魂之井面板是否可见（主菜单入口）
+    ClassSelectMenu classSelectMenu_;     // 职业选择菜单（新游戏时弹出）
+    bool classSelectMenuVisible_ = false; // 职业选择菜单是否可见
+    PlayerClass selectedClass_ = PlayerClass::Mage; // 当前选择的职业
     SaveLoadMenu saveLoadMenu_;           // 存档/读档槽位选择菜单
     SaveSystem saveSystem_;               // 存档系统
     bool saveLoadMenuVisible_ = false;    // 存档菜单是否可见

@@ -18,7 +18,9 @@ namespace cu {
 // Phase 8: 显示升级选择菜单
 // ============================================================================
 void Game::showUpgradeChoice() {
-    currentUpgradeOptions_ = upgradeSystem_.RollUpgrades();
+    PlayerComponent* pc = registry_.GetComponent<PlayerComponent>(playerId_);
+    PlayerClass cls = pc ? pc->playerClass : PlayerClass::Mage;
+    currentUpgradeOptions_ = upgradeSystem_.RollUpgrades(cls);
     upgradeChoiceActive_ = true;
     relicPanelVisible_ = false; // 升级菜单打开时关闭圣物面板，避免 UI 叠加
     upgradeMenu_.SetOptions(currentUpgradeOptions_);
@@ -94,7 +96,9 @@ void Game::handleUpgradeChoice() {
 
             // 若仍有剩余技能点，重新滚动选项保持菜单打开；否则关闭
             if (upgradeSystem_.GetSkillPoints() > 0) {
-                currentUpgradeOptions_ = upgradeSystem_.RollUpgrades();
+                PlayerComponent* pc2 = registry_.GetComponent<PlayerComponent>(playerId_);
+                PlayerClass cls2 = pc2 ? pc2->playerClass : PlayerClass::Mage;
+                currentUpgradeOptions_ = upgradeSystem_.RollUpgrades(cls2);
                 upgradeMenu_.SetOptions(currentUpgradeOptions_);
                 upgradeUI_.Show(currentUpgradeOptions_);
                 LOG_INFO("仍有 %d 个技能点未使用，继续选择", upgradeSystem_.GetSkillPoints());
@@ -187,6 +191,38 @@ void Game::handleUIInput() {
             }
         }
         return; // 灵魂之井面板打开时不处理其他 UI 输入
+    }
+
+    // ---- 职业选择菜单处理（优先级最高，打开时屏蔽其他 UI 输入）----
+    if (classSelectMenuVisible_) {
+        // 更新悬停状态
+        int hoverIdx = -1;
+        for (int i = 0; i < static_cast<int>(PlayerClass::Count); ++i) {
+            if (classSelectMenu_.HandleMouseClick(mousePos) == i) {
+                hoverIdx = i;
+                break;
+            }
+        }
+        classSelectMenu_.SetHoveredCard(hoverIdx);
+
+        if (mousePressed) {
+            int result = classSelectMenu_.HandleMouseClick(mousePos);
+            if (result >= 0 && result < static_cast<int>(PlayerClass::Count)) {
+                // 选择职业卡片
+                selectedClass_ = static_cast<PlayerClass>(result);
+                classSelectMenu_.ResetSelection();
+                classSelectMenu_.SetHoveredCard(-1);
+                // 重新设置选中状态
+                classSelectMenu_.HandleKeyInput(result == 0 ? 27 : 28);
+                AudioManager::Instance().PlaySFX(AudioManager::kSFXPickup);
+            } else if (result == static_cast<int>(PlayerClass::Count)) {
+                // 点击确认按钮
+                if (classSelectMenu_.GetSelectedIndex() >= 0) {
+                    handleClassSelectMenuClick(classSelectMenu_.GetSelectedIndex());
+                }
+            }
+        }
+        return; // 职业选择菜单打开时不处理其他 UI 输入
     }
 
     // ---- 存档菜单处理（优先级最高，打开时屏蔽其他 UI 输入）----

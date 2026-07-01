@@ -36,6 +36,7 @@
 #include <optional>
 #include <fstream>
 #include "gameplay/Player.h"
+#include "gameplay/PlayerClassTypes.h"
 #include "gameplay/UpgradeSystem.h"
 #include "gameplay/InventorySystem.h"
 #include "gameplay/SkillSystem.h"
@@ -53,6 +54,7 @@ struct SaveSlotInfo {
     float survivalTime = 0.f;     // 存活时间（秒）
     int coins = 0;                // 金币数
     int playerLevel = 1;          // 玩家等级
+    PlayerClass playerClass = PlayerClass::Mage;  // 职业
     int64_t timestamp = 0;        // 存档时间戳（Unix 秒）
 };
 
@@ -66,6 +68,7 @@ struct SaveData {
     // ---- 玩家状态 ----
     float playerHp = 100.f;       // 当前 HP（maxHp 由 recomputePlayerStats 重算）
     int coins = 0;                // 金币
+    PlayerClass playerClass = PlayerClass::Mage;  // 职业
 
     // ---- 升级系统（决定 PlayerStats 派生属性的核心源数据）----
     int playerLevel = 1;          // 玩家等级
@@ -114,10 +117,11 @@ public:
     static constexpr int kSlotCount = 3;
     // 文件魔数 "CRAZ"（4 字节，便于识别与版本迁移）
     static constexpr uint32_t kMagicNumber = 0x4352415A; // 'C''R''A''Z'
+    // 版本 5：新增职业系统字段（playerClass，1 字节）
+    // 版本 4：新增 Item.setId 字段
     // 版本 3：新增地牢变异系统字段（floorModifierIds 数组，2 字节）
     // 版本 2：新增圣物系统字段（relicIds 数组，6 字节）
-    // 旧版本 1 存档因格式不兼容将无法读取，需开始新游戏
-    static constexpr uint8_t kSaveVersion = 4; // 第二十三轮升级：v3→v4，新增 Item.setId 字段
+    static constexpr uint8_t kSaveVersion = 5;
 
     // 保存到指定槽位（slot 为 1-based 索引：1, 2, 3）
     // 返回 true 表示保存成功

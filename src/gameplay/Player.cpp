@@ -4,6 +4,7 @@
 #include "rendering/Camera.h"
 #include "ecs/Component.h"
 #include "gameplay/DungeonGenerator.h"
+#include "gameplay/ClassSystem.h"
 #include "utils/Logger.h"
 #include <cmath>
 
@@ -13,7 +14,8 @@ namespace cu {
 // CreatePlayer —— 创建玩家实体
 // ============================================================================
 EntityId CreatePlayer(Registry& registry, sf::Vector2f position,
-                      const PlayerSheetInfo& sheetInfo) {
+                      const PlayerSheetInfo& sheetInfo,
+                      PlayerClass playerClass) {
     EntityId id = registry.CreateEntity();
 
     // Transform：位置与缩放
@@ -43,10 +45,11 @@ EntityId CreatePlayer(Registry& registry, sf::Vector2f position,
     collider.isCircle = true;
     collider.radius = 16.f;
 
-    // Health：100/100
+    // Health：根据职业设置初始 HP
     auto& health = registry.AddComponent<Health>(id);
-    health.current = 100.f;
-    health.max = 100.f;
+    const ClassData& cd = GetClassData(playerClass);
+    health.current = cd.maxHp;
+    health.max = cd.maxHp;
     health.invincibleTimer = 0.f;
 
     // Tag：Player
@@ -70,11 +73,15 @@ EntityId CreatePlayer(Registry& registry, sf::Vector2f position,
 
     // PlayerComponent：玩家属性
     auto& player = registry.AddComponent<PlayerComponent>(id);
+    player.playerClass = playerClass;
     player.facing = FacingDirection::Down;
     player.animState = PlayerAnimState::Idle;
     player.attackTimer = 0.f;
     player.hurtTimer = 0.f;
     player.wasMoving = false;
+    // 设置职业基础法力值
+    player.stats.maxMp = cd.maxMp;
+    player.stats.currentMp = cd.maxMp;
 
     // 显式初始化技能背包为空（SkillType::Count）
     for (int i = 0; i < kSkillBackpackSize; ++i) {
@@ -86,7 +93,8 @@ EntityId CreatePlayer(Registry& registry, sf::Vector2f position,
         player.skillSlots[i].cooldownRemain = 0.f;
     }
 
-    LOG_INFO("玩家实体已创建: id=%u, pos=(%.1f, %.1f)", id, position.x, position.y);
+    LOG_INFO("玩家实体已创建: id=%u, pos=(%.1f, %.1f), class=%s",
+             id, position.x, position.y, GetClassName(playerClass));
     return id;
 }
 

@@ -186,25 +186,39 @@ float UpgradeSystem::GetExpProgress() const noexcept {
 // RollUpgrades  随机抽 3 个未满级升级选项
 // ----------------------------------------------------------------------------
 // 算法：
-//   1. 收集所有未满级的升级类型
+//   1. 收集所有未满级的升级类型（按职业过滤不适用项）
 //   2. 随机打乱
 //   3. 取前 3 个
 //   4. 不足 3 个则用 Count 填充
+//
+// 职业过滤规则：
+//   剑士 (Warrior)：排除 ProjectileSplit / ProjectilePierce / ChainLightning
+//                   （这些仅对远程弹幕生效，剑士近战无法受益）
+//   法师 (Mage)   ：不排除任何升级（所有升级均对法师有效）
 // ============================================================================
-std::array<UpgradeOption, 3> UpgradeSystem::RollUpgrades() {
+std::array<UpgradeOption, 3> UpgradeSystem::RollUpgrades(PlayerClass cls) {
     std::array<UpgradeOption, 3> result;
     // 初始化为无效
     for (auto& opt : result) {
         opt.type = UpgradeType::Count;
     }
 
-    // 收集未满级升级
+    // 收集未满级升级（按职业过滤）
     std::vector<UpgradeType> available;
     for (int i = 0; i < static_cast<int>(UpgradeType::Count); ++i) {
         UpgradeType t = static_cast<UpgradeType>(i);
-        if (GetUpgradeLevel(t) < GetMaxLevel(t)) {
-            available.push_back(t);
+        if (GetUpgradeLevel(t) >= GetMaxLevel(t)) continue;
+
+        // 剑士排除远程弹幕专属升级
+        if (cls == PlayerClass::Warrior) {
+            if (t == UpgradeType::ProjectileSplit ||
+                t == UpgradeType::ProjectilePierce ||
+                t == UpgradeType::ChainLightning) {
+                continue;
+            }
         }
+
+        available.push_back(t);
     }
 
     if (available.empty()) {

@@ -98,15 +98,16 @@ void Game::initializeUI() {
     achievementMenu_.Initialize(font);
     saveLoadMenu_.Initialize(font);
     soulWellMenu_.Initialize(font); // 第二十四轮新增：灵魂之井面板
+    classSelectMenu_.Initialize(font); // 职业选择菜单
     // 同步当前设置到设置菜单显示
     settingsMenu_.SetBGMVolume(settings_.GetBGMVolume());
     settingsMenu_.SetSFXVolume(settings_.GetSFXVolume());
     settingsMenu_.SetResolution(settings_.GetWidth(), settings_.GetHeight());
 
     // 注册主菜单按钮回调
-    mainMenu_.GetStartButton()->SetOnClick([this]() {
-        // 新游戏：弹出槽位选择菜单（SaveNew 模式，会覆盖已有存档）
-        showSaveLoadMenu(SaveLoadMenu::Mode::SaveNew);
+  mainMenu_.GetStartButton()->SetOnClick([this]() {
+        // 新游戏：先弹出职业选择菜单，确认后再弹出槽位选择
+        showClassSelectMenu();
     });
     mainMenu_.GetLoadGameButton()->SetOnClick([this]() {
         // 读取存档：弹出槽位选择菜单（Load 模式）
@@ -354,8 +355,14 @@ void Game::handleEvents() {
             auto key = event.key.code;
             // Phase 8: ESC 键状态切换
             if (key == sf::Keyboard::Escape) {
+                // 职业选择菜单打开时，ESC 优先关闭并返回主菜单
+                if (classSelectMenuVisible_) {
+                    classSelectMenuVisible_ = false;
+                    classSelectMenu_.SetVisible(false);
+                    LOG_INFO("职业选择菜单已关闭（ESC）");
+                }
                 // 存档菜单打开时，ESC 优先关闭存档菜单
-                if (saveLoadMenuVisible_) {
+                else if (saveLoadMenuVisible_) {
                     saveLoadMenuVisible_ = false;
                     saveLoadMenu_.SetVisible(false);
                     LOG_INFO("存档菜单已关闭（ESC）");
@@ -516,6 +523,11 @@ void Game::handleEvents() {
                         LOG_INFO("任务面板已关闭");
                     }
                 }
+            } else if (key == sf::Keyboard::Enter) {
+                // 职业选择菜单确认
+                if (classSelectMenuVisible_ && classSelectMenu_.GetSelectedIndex() >= 0) {
+                    handleClassSelectMenuClick(classSelectMenu_.GetSelectedIndex());
+                }
             } else if (key == sf::Keyboard::Tab) {
                 // Tab 键：切换成就面板
                 if (state_ == GameState::Playing && !upgradeChoiceActive_ &&
@@ -542,6 +554,15 @@ void Game::handleEvents() {
                 }
             } else if (key == sf::Keyboard::Num1 || key == sf::Keyboard::Num2 ||
                        key == sf::Keyboard::Num3 || key == sf::Keyboard::Num4) {
+                // ---- 职业选择菜单键盘输入（1/2 选择职业）----
+                if (classSelectMenuVisible_) {
+                    int idx = classSelectMenu_.HandleKeyInput(static_cast<int>(key));
+                    if (idx >= 0) {
+                        selectedClass_ = static_cast<PlayerClass>(idx);
+                        AudioManager::Instance().PlaySFX(AudioManager::kSFXPickup);
+                    }
+                    return;
+                }
                 // ---- 第三十三轮：对话选项优先（对话活跃时，1-4 选择选项）----
                 if (dialogueSystem_.IsActive() && dialogueSystem_.GetState().showChoices) {
                     int idx = -1;
@@ -612,7 +633,9 @@ void Game::handleEvents() {
 
                         // 若仍有剩余技能点，重新滚动选项保持菜单打开；否则关闭
                         if (upgradeSystem_.GetSkillPoints() > 0) {
-                            currentUpgradeOptions_ = upgradeSystem_.RollUpgrades();
+                            PlayerComponent* pcR = registry_.GetComponent<PlayerComponent>(playerId_);
+                            PlayerClass clsR = pcR ? pcR->playerClass : PlayerClass::Mage;
+                            currentUpgradeOptions_ = upgradeSystem_.RollUpgrades(clsR);
                             upgradeMenu_.SetOptions(currentUpgradeOptions_);
                             upgradeUI_.Show(currentUpgradeOptions_);
                             LOG_INFO("仍有 %d 个技能点未使用，继续选择", upgradeSystem_.GetSkillPoints());
@@ -667,6 +690,11 @@ void Game::Run() {
         window_.setView(sf::View(sf::FloatRect(0.f, 0.f, 1280.f, 720.f)));
         if (settingsMenuVisible_) {
             settingsMenu_.Render(window_);
+        }
+
+        // 4.5 职业选择菜单覆盖层（任意状态都可显示）
+        if (classSelectMenuVisible_) {
+            classSelectMenu_.Render(window_);
         }
 
         // 4.6 存档菜单覆盖层（任意状态都可显示，使用固定 1280x720 逻辑分辨率）
